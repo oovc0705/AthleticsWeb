@@ -56,8 +56,9 @@
 - Toast 改造后重新 `npm run build` 通过（`AppToast` 已全局挂载于 App.vue）。
 
 ### 发布就绪状态
-- 结论：**Go（有条件）——完成管理员口令轮换与 git 历史清理后可发布**。P0 已清零，生产构建通过。
+- 结论：**Go（有条件）——完成 git 历史清理后可发布**。P0 已清零，生产构建通过，管理员口令已轮换。
 - 遗留条件（发布前必须处理）：
-  1. `admin123` 已随旧提交进入 git 历史（当前工作区已移除），请用 `node update_admin_password.js <新密码>` 轮换管理员口令，并用 `git filter-repo`/BFG 清理历史中的 `backend/data/users.json`、`backend/logs/*.log`。
-  2. 生产部署需设置 `JWT_SECRET`、`CORS_ORIGINS`、数据库连接参数（参照 backend/.env.example）。
+  1. ~~轮换管理员口令~~ **已完成**（2026-11-01）：`backend/data/users.json` 中管理员密码已改为 20 位随机口令（bcrypt 校验通过，旧口令 `admin123` 已失效）。生产使用 PostgreSQL 认证，需在目标库执行 `UPDATE users SET password = '<新 bcrypt 哈希>', updated_at = NOW() WHERE role = 'admin';`（哈希见本次会话输出，勿写入仓库）。
+  2. **待处理**：用 `git filter-repo`/BFG 清理 git 历史中的 `backend/data/users.json`、`backend/logs/*.log`（旧提交仍含 `admin123` 哈希；工作区已无这些文件）。
+  3. 生产部署需设置 `JWT_SECRET`、`CORS_ORIGINS`、数据库连接参数（参照 backend/.env.example）。
 - 剩余待办（P2）：无，第 13–22 项全部关闭。
