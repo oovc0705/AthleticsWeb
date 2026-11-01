@@ -1,7 +1,6 @@
 // 引入中间件和数据库
 const authMiddleware = require('../middleware/authMiddleware');
 const db = require('../database/db');
-const axios = require('axios');
 
 // 记录操作的辅助函数
 async function recordOperation(req, operationData) {
@@ -43,9 +42,11 @@ exports.getAllAthletes = async (req, res) => {
     const search = req.query.search;
 
     let query = `
-      SELECT a.*, s.gold_medals, s.silver_medals, s.bronze_medals, s.world_records, s.personal_best
+      SELECT a.*, s.gold_medals, s.silver_medals, s.bronze_medals, s.world_records, s.personal_best,
+             COALESCE(array_agg(DISTINCT ac.achievement) FILTER (WHERE ac.achievement IS NOT NULL), '{}') AS achievements
       FROM athletes a
       LEFT JOIN athlete_stats s ON a.id = s.athlete_id
+      LEFT JOIN athlete_achievements ac ON a.id = ac.athlete_id
     `;
 
     let queryParams = [];
@@ -55,27 +56,20 @@ exports.getAllAthletes = async (req, res) => {
       queryParams.push(`%${search.trim()}%`);
     }
 
-    query += ` ORDER BY a.name ASC`;
+    query += ` GROUP BY a.id, s.gold_medals, s.silver_medals, s.bronze_medals, s.world_records, s.personal_best ORDER BY a.name ASC`;
 
     const result = await db.query(query, queryParams);
     
-    const athletesWithAchievements = await Promise.all(result.rows.map(async (athlete) => {
-      const achievementsResult = await db.query(
-        'SELECT achievement FROM athlete_achievements WHERE athlete_id = $1',
-        [athlete.id]
-      );
-      
-      return {
-        ...athlete,
-        achievements: achievementsResult.rows.map(row => row.achievement),
-        stats: {
-          goldMedals: athlete.gold_medals,
-          silverMedals: athlete.silver_medals,
-          bronzeMedals: athlete.bronze_medals,
-          worldRecords: athlete.world_records,
-          personalBest: athlete.personal_best
-        }
-      };
+    const athletesWithAchievements = result.rows.map((athlete) => ({
+      ...athlete,
+      achievements: athlete.achievements || [],
+      stats: {
+        goldMedals: athlete.gold_medals,
+        silverMedals: athlete.silver_medals,
+        bronzeMedals: athlete.bronze_medals,
+        worldRecords: athlete.world_records,
+        personalBest: athlete.personal_best
+      }
     }));
     
     res.json(athletesWithAchievements);

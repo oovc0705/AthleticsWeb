@@ -36,10 +36,8 @@ export const getNewsById = async (id) => {
  */
 export const createNews = async (data) => {
   try {
-    console.log('创建新闻请求数据:', data);
     // axios会自动将JavaScript对象转换为JSON字符串并设置Content-Type
     const createdData = await api.post('/news', data);
-    console.log('创建新闻成功响应:', createdData);
     return createdData.data;
   } catch (error) {
     console.error('创建新闻失败:', error);

@@ -1,14 +1,15 @@
 const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config();
 
 async function checkAndOptimizeTable() {
   const client = new Client({
-    host: 'localhost',
-    port: 5432,
-    database: 'webclone',
-    user: 'postgres',
-    password: 'ykfpostgresql'
+    host: process.env.DB_HOST || 'localhost',
+    port: Number(process.env.DB_PORT) || 5432,
+    database: process.env.DB_NAME || 'webclone',
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD
   });
 
   try {

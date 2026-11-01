@@ -1,6 +1,5 @@
 const authMiddleware = require('../middleware/authMiddleware');
 const db = require('../database/db');
-const axios = require('axios');
 
 // 记录操作的辅助函数
 async function recordOperation(req, operationData) {

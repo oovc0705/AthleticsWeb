@@ -51,7 +51,9 @@
           </div>
           
           <div class="card-body">
-            <table class="user-table">
+            <div v-if="usersLoading" class="loading">加载中...</div>
+            <div v-else-if="filteredUsers.length === 0" class="no-content">暂无用户</div>
+            <table v-else class="user-table">
               <thead>
                 <tr>
                   <th>ID</th>
@@ -459,13 +461,30 @@ const searchTerm = ref('')
 const isEditModalOpen = ref(false)
 const editingUser = ref(null)
 
-// 模拟用户数据
-const users = ref([
-  { id: 1, username: 'admin', email: 'admin@example.com', role: 'admin', createdAt: '2024-01-01T00:00:00Z' },
-  { id: 2, username: 'user1', email: 'user1@example.com', role: 'user', createdAt: '2024-01-02T00:00:00Z' },
-  { id: 3, username: 'user2', email: 'user2@example.com', role: 'user', createdAt: '2024-01-03T00:00:00Z' },
-  { id: 4, username: 'user3', email: 'user3@example.com', role: 'user', createdAt: '2024-01-04T00:00:00Z' }
-])
+// 用户数据（来自后端管理员接口）
+const users = ref([])
+const usersLoading = ref(false)
+
+// 获取用户列表
+const fetchUsers = async () => {
+  try {
+    usersLoading.value = true
+    const response = await apiService.get('/auth/users')
+    users.value = response.data.map(u => ({
+      id: u.id,
+      username: u.username,
+      email: u.email,
+      role: u.role,
+      createdAt: u.created_at
+    }))
+    handleSearch()
+  } catch (error) {
+    console.error('获取用户列表失败:', error)
+    alert(error.response?.data?.error || '获取用户列表失败，请稍后重试')
+  } finally {
+    usersLoading.value = false
+  }
+}
 
 // 过滤后的用户列表
 const filteredUsers = ref([...users.value])
@@ -863,7 +882,6 @@ const recordOperation = async (action, targetType, targetId, targetTitle, target
     })
     
     const result = response.data
-    console.log('操作记录已保存到后端:', result)
     return result
   } catch (error) {
     console.error('记录操作失败:', error)
@@ -874,14 +892,11 @@ const recordOperation = async (action, targetType, targetId, targetTitle, target
 
 // 删除内容
 const deleteContent = async (item) => {
-  console.log('deleteContent被调用，item:', item)
   if (confirm(`确定要删除该${item.typeName}吗？`)) {
     try {
       const { type, id, title, data } = item
-      console.log('提取的数据:', { type, id, title, data })
       
       // 记录删除操作（在API调用之前记录，确保无论API调用结果如何都能记录操作）
-      console.log('准备调用recordOperation')
       await recordOperation(
         'delete',
         type,
@@ -891,7 +906,6 @@ const deleteContent = async (item) => {
         null,
         `/${type === 'athlete' ? 'athletes' : type}s/${id}`
       )
-      console.log('recordOperation调用完成')
       
       switch (type) {
         case 'athlete':
@@ -936,23 +950,42 @@ const closeEditModal = () => {
 }
 
 // 保存用户更改
-const saveUserChanges = () => {
-  // 更新用户列表
-  const index = users.value.findIndex(u => u.id === editingUser.value.id)
-  if (index !== -1) {
-    users.value[index] = { ...editingUser.value }
-    handleSearch() // 重新搜索以更新显示
+const saveUserChanges = async () => {
+  try {
+    const response = await apiService.put(`/auth/users/${editingUser.value.id}`, {
+      username: editingUser.value.username,
+      email: editingUser.value.email,
+      role: editingUser.value.role
+    })
+    const index = users.value.findIndex(u => u.id === editingUser.value.id)
+    if (index !== -1) {
+      users.value[index] = {
+        ...users.value[index],
+        username: response.data.username,
+        email: response.data.email,
+        role: response.data.role
+      }
+      handleSearch() // 重新搜索以更新显示
+    }
+    closeEditModal()
+    alert('用户信息已更新')
+  } catch (error) {
+    console.error('更新用户失败:', error)
+    alert(error.response?.data?.error || '更新失败，请稍后重试')
   }
-  closeEditModal()
-  alert('用户信息已更新')
 }
 
 // 删除用户
-const deleteUser = (id) => {
-  if (confirm('确定要删除该用户吗？')) {
+const deleteUser = async (id) => {
+  if (!confirm('确定要删除该用户吗？')) return
+  try {
+    await apiService.delete(`/auth/users/${id}`)
     users.value = users.value.filter(u => u.id !== id)
     handleSearch() // 重新搜索以更新显示
     alert('用户已删除')
+  } catch (error) {
+    console.error('删除用户失败:', error)
+    alert(error.response?.data?.error || '删除失败，请稍后重试')
   }
 }
 
@@ -997,7 +1030,7 @@ onMounted(() => {
     router.push('/')
     return
   }
-  handleSearch()
+  fetchUsers()
   fetchLatestContent()
   fetchOperationRecords()
 })

@@ -107,14 +107,6 @@ router.beforeEach((to, from, next) => {
   next()
 })
 
-// 全局后置守卫 - 路由变化时处理搜索状态
-router.afterEach((to, from) => {
-  // 如果目标路由需要清空搜索，且当前有搜索状态，则触发清空
-  if (to.meta.requiresSearchClear && from.name === 'search') {
-    // 这里需要触发搜索栏清空逻辑
-    // 实际实现需要在搜索组件中监听路由事件或使用状态管理
-    console.log('[Route Guard] Should clear search input for route:', to.path)
-  }
-})
+// 全局后置守卫（搜索栏清空逻辑由 AppHeader 在路由变化时处理）
 
 export default router

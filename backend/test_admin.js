@@ -1,6 +1,11 @@
 const axios = require('axios');
 const fs = require('fs');
 
+if (!process.env.TEST_PASSWORD) {
+  console.error('缺少 TEST_PASSWORD 环境变量，脚本退出');
+  process.exit(1);
+}
+
 const API_BASE_URL = 'http://localhost:3003/api';
 
 // 测试管理员登录
@@ -9,7 +14,7 @@ async function testAdminLogin() {
   try {
     const response = await axios.post(`${API_BASE_URL}/auth/login`, {
       email: 'admin@example.com',
-      password: 'password123'
+      password: process.env.TEST_PASSWORD
     });
     console.log('登录成功！');
     console.log('Token:', response.data.token);

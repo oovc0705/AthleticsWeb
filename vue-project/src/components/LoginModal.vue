@@ -513,11 +513,6 @@ const handleRegister = async () => {
   try {
     // 验证码验证（模拟实现，接受任意6位数字）
     // 实际项目中应该与后端进行验证
-    if (!/^[0-9]{6}$/.test(verificationCode.value)) {
-      // 为了简化测试，我们将验证码验证改为可选
-      // 实际项目中应该严格验证
-      console.log('验证码格式不正确，但继续注册流程')
-    }
     
     const result = await userStore.register({
       name: registerForm.name,

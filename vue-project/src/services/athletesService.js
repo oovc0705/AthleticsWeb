@@ -36,9 +36,7 @@ export const getAthleteById = async (id) => {
  */
 export const createAthlete = async (data) => {
   try {
-    console.log('创建运动员请求数据:', data);
     const createdData = await api.post('/athletes', data);
-    console.log('创建运动员成功响应:', createdData);
     return createdData.data;
   } catch (error) {
     console.error('创建运动员失败:', error);

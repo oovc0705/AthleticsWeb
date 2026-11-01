@@ -499,17 +499,7 @@ const saveNews = async () => {
       await updateNews(editingNews.value.id, newsForm.value)
     } else {
       // 添加新闻
-      console.log('=== 开始保存新闻 ===')
-      console.log('准备创建新闻，表单数据:', JSON.stringify(newsForm.value))
-      const token = localStorage.getItem('token')
-      console.log('当前登录令牌:', token ? token.substring(0, 20) + '...' + token.substring(token.length - 20) : '无令牌')
-      console.log('localStorage中所有项目:', Object.keys(localStorage))
-      console.log('localStorage中的isAdminLoggedIn:', localStorage.getItem('isAdminLoggedIn'))
-      console.log('localStorage中的userInfo:', localStorage.getItem('userInfo'))
-      
-      const result = await createNews(newsForm.value)
-      console.log('新闻创建成功，返回结果:', result)
-      console.log('=== 保存新闻完成 ===')
+      await createNews(newsForm.value)
     }
     
     // 重新加载数据
@@ -576,9 +566,7 @@ const saveEvent = async (formData) => {
     if (!formData.schedules) {
       formData.schedules = []
     }
-    
-    console.log('准备保存赛事，表单数据:', JSON.stringify(formData))
-    
+
     if (eventData.value) {
       // 更新赛事
       await updateEvent(eventData.value.id, formData)

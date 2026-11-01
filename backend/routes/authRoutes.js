@@ -74,6 +74,11 @@ router.post('/register', registerLimiter, registerValidationRules(), validate, a
 // 获取当前用户信息路由
 router.get('/current-user', authMiddleware.verifyToken, authController.getCurrentUser);
 
+// 管理员用户管理路由
+router.get('/users', authMiddleware.verifyToken, authMiddleware.isAdmin, authController.getAllUsers);
+router.put('/users/:id', authMiddleware.verifyToken, authMiddleware.isAdmin, authController.updateUserByAdmin);
+router.delete('/users/:id', authMiddleware.verifyToken, authMiddleware.isAdmin, authController.deleteUserByAdmin);
+
 // 更新用户信息路由
 router.put('/update-user', authMiddleware.verifyToken, [
   body('username').notEmpty().withMessage('用户名不能为空')

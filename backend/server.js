@@ -32,6 +32,13 @@ if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir);
 }
 
+// 异步写日志，避免同步 I/O 阻塞事件循环
+const writeLog = (fileName, entry) => {
+  fs.appendFile(path.join(logsDir, fileName), entry, (err) => {
+    if (err) console.error('写日志失败:', err.message);
+  });
+};
+
 // 中间件配置
 // 允许的来源通过环境变量配置，生产环境必须显式加入前端域名
 const allowedOrigins = (process.env.CORS_ORIGINS ||
@@ -68,7 +75,7 @@ app.use(express.urlencoded({ extended: true }));
 // 日志中间件
 app.use((req, res, next) => {
   const logEntry = `${new Date().toISOString()} - ${req.method} ${req.url} - IP: ${req.ip}\n`;
-  fs.appendFileSync(path.join(logsDir, 'access.log'), logEntry);
+  writeLog('access.log', logEntry);
   next();
 });
 
@@ -134,7 +141,7 @@ app.use((req, res) => {
 // 错误处理中间件
 app.use((err, req, res, next) => {
   const errorLog = `${new Date().toISOString()} - ERROR: ${err.message}\nStack: ${err.stack}\n`;
-  fs.appendFileSync(path.join(logsDir, 'error.log'), errorLog);
+  writeLog('error.log', errorLog);
 
   console.error('请求URL:', req.url);
   console.error('请求方法:', req.method);

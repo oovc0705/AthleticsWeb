@@ -431,8 +431,6 @@ const handleFavoriteUpdate = ({ type, id, isFavorite }) => {
 const savePreferences = async () => {
   try {
     // 这里可以添加保存到后端的逻辑
-    console.log('保存偏好设置:', preferences.value);
-    
     // 应用主题变化
     userStore.setTheme(preferences.value.theme);
     

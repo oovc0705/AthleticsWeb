@@ -1,5 +1,10 @@
 const axios = require('axios');
 
+if (!process.env.TEST_PASSWORD) {
+  console.error('缺少 TEST_PASSWORD 环境变量，脚本退出');
+  process.exit(1);
+}
+
 async function testLoginAndGetLogs() {
   try {
     console.log('测试登录功能...');
@@ -7,7 +12,7 @@ async function testLoginAndGetLogs() {
     // 测试登录
     const loginResponse = await axios.post('http://localhost:3006/api/auth/login', {
       username: 'admin',
-      password: 'admin123'
+      password: process.env.TEST_PASSWORD
     });
     
     console.log('登录成功，用户信息:', loginResponse.data.user);

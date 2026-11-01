@@ -38,7 +38,6 @@ const selectLanguage = (language) => {
   // 持久化语言选择到localStorage
   localStorage.setItem('language', language.value)
   isLanguageMenuOpen.value = false
-  console.log('Language changed to:', language.value)
 }
 
 // 点击外部关闭语言菜单

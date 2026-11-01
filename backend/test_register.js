@@ -1,5 +1,10 @@
 const axios = require('axios');
 
+if (!process.env.TEST_PASSWORD) {
+  console.error('缺少 TEST_PASSWORD 环境变量，脚本退出');
+  process.exit(1);
+}
+
 const API_URL = 'http://localhost:3006/api/auth/register';
 
 const testRegister = async () => {
@@ -9,7 +14,7 @@ const testRegister = async () => {
   const userDuplicateName = {
     name: 'admin', // assuming 'admin' exists
     email: `email_${randomStr}@test.com`,
-    password: 'password123',
+    password: process.env.TEST_PASSWORD,
     country: 'CN'
   };
 

@@ -56,12 +56,8 @@ router.get('/', authMiddleware.verifyToken, async (req, res) => {
     });
   } catch (error) {
     console.error('获取收藏列表失败:', error);
-    // 返回空数据而不是错误，防止前端崩溃
-    res.json({
-      athletes: [],
-      events: [],
-      news: []
-    });
+    // 返回明确错误态，避免数据库故障被误判为"没有收藏"
+    res.status(500).json({ error: '获取收藏列表失败，请稍后重试' });
   }
 });
 

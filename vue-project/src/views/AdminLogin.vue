@@ -53,12 +53,8 @@ const handleLogin = async () => {
     isLoading.value = true
     error.value = ''
     
-    console.log('[AdminLogin] 开始登录，表单数据:', loginForm.value);
-    
     // 调用登录API
     const response = await login(loginForm.value)
-    
-    console.log('[AdminLogin] 登录API返回:', response);
     
     // 检查响应是否有效
     if (!response) {
@@ -72,7 +68,6 @@ const handleLogin = async () => {
       // 检查是否是管理员
       if (response.user.role === 'admin') {
         // 登录成功且是管理员，保存登录信息到localStorage
-        console.log('[AdminLogin] 登录成功且是管理员，保存登录信息');
         localStorage.setItem('isAdminLoggedIn', 'true');
         localStorage.setItem('userInfo', JSON.stringify(response.user));
         localStorage.setItem('token', response.token);
@@ -80,7 +75,6 @@ const handleLogin = async () => {
         router.push('/admin');
       } else {
         // 不是管理员账号
-        console.log('[AdminLogin] 不是管理员账号');
         error.value = '您没有管理员权限'
       }
     } else {

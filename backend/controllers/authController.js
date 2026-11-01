@@ -306,6 +306,85 @@ exports.register = async (req, res) => {
   }
 };
 
+// 管理员：获取用户列表
+exports.getAllUsers = async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, username, email, role, country, created_at FROM users ORDER BY created_at DESC'
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('获取用户列表错误:', error);
+    res.status(500).json({ error: '服务器内部错误，请稍后重试' });
+  }
+};
+
+// 管理员：更新指定用户
+exports.updateUserByAdmin = async (req, res) => {
+  try {
+    const userId = Number.parseInt(req.params.id, 10);
+    const { username, email, role } = req.body || {};
+
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: '无效的用户ID' });
+    }
+    if (!username || !email || !['user', 'admin'].includes(role)) {
+      return res.status(400).json({ error: '用户名、邮箱和角色均为必填，角色只能是 user 或 admin' });
+    }
+
+    const target = await pool.query('SELECT role FROM users WHERE id = $1', [userId]);
+    if (target.rows.length === 0) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+    if (userId === req.user.id && target.rows[0].role !== role) {
+      return res.status(400).json({ error: '不能修改自己的角色，避免后台失去管理员' });
+    }
+
+    const result = await pool.query(
+      'UPDATE users SET username = $1, email = $2, role = $3, updated_at = NOW() WHERE id = $4 RETURNING id, username, email, role, created_at',
+      [username, email, role, userId]
+    );
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('更新用户错误:', error);
+    if (error.code === '23505') {
+      if (error.constraint === 'users_email_key') {
+        return res.status(409).json({ error: '该邮箱已被使用' });
+      }
+      if (error.constraint === 'users_username_key') {
+        return res.status(409).json({ error: '该用户名已被使用' });
+      }
+    }
+    res.status(500).json({ error: '服务器内部错误，请稍后重试' });
+  }
+};
+
+// 管理员：删除指定用户
+exports.deleteUserByAdmin = async (req, res) => {
+  try {
+    const userId = Number.parseInt(req.params.id, 10);
+
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: '无效的用户ID' });
+    }
+    if (userId === req.user.id) {
+      return res.status(400).json({ error: '不能删除当前登录账号' });
+    }
+
+    const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [userId]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('删除用户错误:', error);
+    if (error.code === '23503') {
+      return res.status(409).json({ error: '该用户存在关联数据（收藏/评论/操作记录），无法删除' });
+    }
+    res.status(500).json({ error: '服务器内部错误，请稍后重试' });
+  }
+};
+
 // 更新用户信息
 exports.updateUserInfo = async (req, res) => {
   try {

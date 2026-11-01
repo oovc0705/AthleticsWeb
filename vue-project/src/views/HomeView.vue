@@ -127,7 +127,6 @@ const getCountdown = (eventDate) => {
 
 // 获取赛事数据
 const fetchEvents = async () => {
-  console.log('开始获取赛事数据...')
   loading.value = true
   error.value = null
   events.value = [] // 确保events初始化为空数组

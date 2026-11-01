@@ -40,12 +40,7 @@ export const login = async (loginData) => {
     
     return response.data;
   } catch (error) {
-    console.log('=== 登录错误 ===');
-    console.error('13. 错误对象:', error);
-    console.error('14. 错误消息:', error.message);
-    console.error('15. 响应数据:', error.response?.data);
-    console.error('16. 响应状态:', error.response?.status);
-    console.error('17. 请求配置:', error.config);
+    console.error('登录失败:', error.message);
     
     // 处理不同类型的错误
     let errorMessage = '登录失败，请检查网络连接';
@@ -122,9 +117,6 @@ export const isAdmin = () => {
  */
 export const register = async (registerData) => {
   try {
-    console.log('=== 注册开始 ===');
-    console.log('注册数据:', registerData);
-    
     // 确保我们发送的是普通对象，支持传递国家信息
     const sendData = {
       name: registerData.name,
@@ -137,23 +129,13 @@ export const register = async (registerData) => {
       sendData.country = registerData.country;
     }
     
-    // 使用apiService发送注册请求
-    console.log('使用apiService注册');
-    
     // 使用apiService发送注册请求到后端API
     const response = await apiService.post('/auth/register', sendData);
-    
-    console.log('响应状态:', response.status);
-    console.log('响应数据:', response.data);
     
     // 返回响应数据
     return response.data;
   } catch (error) {
-    console.log('=== 注册错误 ===');
-    console.error('错误对象:', error);
-    console.error('错误消息:', error.message);
-    console.error('响应数据:', error.response?.data);
-    console.error('响应状态:', error.response?.status);
+    console.error('注册失败:', error.message);
     
     // 处理不同类型的错误
     let errorMessage = '注册失败，请检查网络连接';
@@ -186,9 +168,6 @@ export const register = async (registerData) => {
  */
 export const updateUserInfo = async (userData) => {
   try {
-    console.log('=== 更新用户信息开始 ===');
-    console.log('更新数据:', userData);
-    
     // 确保我们发送的是普通对象，支持更新用户名和国家
     const sendData = {};
     if (userData.username) sendData.username = userData.username;

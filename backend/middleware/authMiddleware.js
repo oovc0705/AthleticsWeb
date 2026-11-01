@@ -45,7 +45,6 @@ exports.verifyToken = async (req, res, next) => {
     
     // 将完整的用户信息存储在请求对象中
     req.user = result.rows[0];
-    console.log('JWT验证通过，用户信息:', req.user);
     next();
   } catch (error) {
     console.error('JWT验证失败:', error);
@@ -56,12 +55,9 @@ exports.verifyToken = async (req, res, next) => {
 // 验证是否为管理员
 exports.isAdmin = (req, res, next) => {
   // 检查用户是否已通过验证并且角色是管理员
-  console.log('isAdmin中间件，req.user:', req.user);
   if (req.user && req.user.role === 'admin') {
-    console.log('用户是管理员，允许访问');
     next();
   } else {
-    console.log('用户不是管理员或未登录，拒绝访问');
     res.status(403).json({ error: '没有权限执行此操作' });
   }
 };

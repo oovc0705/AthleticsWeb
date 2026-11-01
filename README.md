@@ -151,7 +151,7 @@ cd vue-project
 npm run dev
 ```
 
-前端应用将在 `http://localhost:5173` 启动（或其他可用端口）
+前端应用将在 `http://localhost:3000` 启动（端口由 `vue-project/vite.config.js` 的 `server.port` 决定，被占用时会自动换端口）
 
 ## 可用脚本
 
@@ -251,7 +251,7 @@ docker-compose up -d
 
 ## 开发注意事项
 
-1. **跨域配置**：后端CORS已配置支持 `http://localhost:3000` 和 `http://localhost:3001`
+1. **跨域配置**：后端通过环境变量 `CORS_ORIGINS` 配置允许的前端来源，默认 `http://localhost:3000,http://localhost:3001,http://localhost:5173`
 2. **日志系统**：后端自动记录访问日志和错误日志到 `backend/logs/` 目录
 3. **国际化**：支持中文和英文切换，语言包位于 `vue-project/src/i18n/locales/`
 4. **状态管理**：使用Pinia管理用户状态，存储位置 `vue-project/src/stores/user.js`
