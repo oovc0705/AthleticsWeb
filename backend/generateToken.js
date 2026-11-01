@@ -1,7 +1,9 @@
+require('dotenv').config();
 const jwt = require('jsonwebtoken');
+const { jwtSecret } = require('./config/config');
 
-// 使用与authMiddleware.js中相同的密钥
-const secretKey = 'your_secret_key_here';
+// 使用与 authMiddleware 相同的运行时密钥
+const secretKey = jwtSecret;
 
 // 创建管理员用户对象
 const adminUser = {

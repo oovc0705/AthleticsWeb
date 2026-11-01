@@ -120,7 +120,13 @@ exports.getEventById = async (req, res) => {
 exports.addComment = async (req, res) => {
   try {
     const eventId = req.params.id;
-    const { content, userId, username } = req.body;
+    const { content } = req.body;
+    // 评论者身份必须来自已校验的令牌，不能信任请求体中的 userId
+    const userId = req.user.id;
+
+    if (!content || content.trim() === '') {
+      return res.status(400).json({ error: '评论内容不能为空' });
+    }
 
     // 验证赛事是否存在
     const eventResult = await db.query('SELECT id FROM events WHERE id = $1', [eventId]);
@@ -152,13 +158,15 @@ exports.addComment = async (req, res) => {
 
 // 创建赛事
 exports.createEvent = async (req, res) => {
+  let client;
   try {
     const { name, date, location, description, imageUrl, level, type, status, organizer, endDate, schedules } = req.body;
     
-    // 使用事务确保赛事主体和时间表项目的创建是原子操作
-    await db.query('BEGIN');
+    // 事务必须在同一连接上执行，否则 BEGIN/COMMIT 会落到不同连接而失效
+    client = await db.getClient();
+    await client.query('BEGIN');
     
-    const eventResult = await db.query(
+    const eventResult = await client.query(
       `INSERT INTO events (name, date, location, description, image_url, level, type, status, organizer, end_date, created_at) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW()) 
        RETURNING *`,
@@ -170,7 +178,7 @@ exports.createEvent = async (req, res) => {
     // 处理赛事时间表
     if (schedules && Array.isArray(schedules)) {
       for (const schedule of schedules) {
-        await db.query(
+        await client.query(
           `INSERT INTO event_schedules (event_id, event_name, event_date, event_time, venue, status, description)
            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [event.id, schedule.event_name, schedule.event_date, schedule.event_time, schedule.venue, schedule.status || '未开始', schedule.description]
@@ -178,7 +186,7 @@ exports.createEvent = async (req, res) => {
       }
     }
     
-    await db.query('COMMIT');
+    await client.query('COMMIT');
     
     // 记录创建操作
     try {
@@ -197,19 +205,26 @@ exports.createEvent = async (req, res) => {
     
     res.status(201).json(event);
   } catch (error) {
-    await db.query('ROLLBACK');
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error('回滚失败:', rollbackError.message);
+      }
+    }
     console.error('创建赛事错误:', error);
     res.status(500).json({ error: '服务器内部错误，请稍后重试' });
+  } finally {
+    if (client) client.release();
   }
 };
 
 // 更新赛事
 exports.updateEvent = async (req, res) => {
+  let client;
   try {
     const eventId = req.params.id;
     const { name, date, location, description, imageUrl, status, level, type, organizer, endDate, schedules = [] } = req.body;
-    
-    console.log('Backend updateEvent - 接收到的数据:', { eventId, name, date, location, description, imageUrl, status, level, type, organizer, endDate, schedules });
     
     // 获取更新前的数据
     const originalResult = await db.query('SELECT * FROM events WHERE id = $1', [eventId]);
@@ -218,10 +233,11 @@ exports.updateEvent = async (req, res) => {
     }
     const originalEvent = originalResult.rows[0];
     
-    // 使用事务确保赛事主体和时间表项目的更新是原子操作
-    await db.query('BEGIN');
+    // 事务必须在同一连接上执行，否则 BEGIN/COMMIT 会落到不同连接而失效
+    client = await db.getClient();
+    await client.query('BEGIN');
     
-    const eventResult = await db.query(
+    const eventResult = await client.query(
       `UPDATE events 
        SET name = $1, date = $2, location = $3, description = $4, image_url = $5, status = $6, level = $7, type = $8, organizer = $9, end_date = $10, updated_at = NOW()
        WHERE id = $11 
@@ -229,15 +245,13 @@ exports.updateEvent = async (req, res) => {
       [name, date, location, description, imageUrl, status, level, type, organizer, endDate, eventId]
     );
     
-    console.log('Backend updateEvent - 更新结果:', eventResult.rows[0]);
-    
     // 删除原有的时间表项目
-    await db.query('DELETE FROM event_schedules WHERE event_id = $1', [eventId]);
+    await client.query('DELETE FROM event_schedules WHERE event_id = $1', [eventId]);
     
     // 插入新的时间表项目
     if (schedules && Array.isArray(schedules)) {
       for (const schedule of schedules) {
-        await db.query(
+        await client.query(
           `INSERT INTO event_schedules (event_id, event_name, event_date, event_time, venue, status, description)
            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [eventId, schedule.event_name, schedule.event_date, schedule.event_time, schedule.venue, schedule.status || '未开始', schedule.description]
@@ -245,7 +259,7 @@ exports.updateEvent = async (req, res) => {
       }
     }
     
-    await db.query('COMMIT');
+    await client.query('COMMIT');
     
     // 记录更新操作
     try {
@@ -265,10 +279,17 @@ exports.updateEvent = async (req, res) => {
     
     res.json(eventResult.rows[0]);
   } catch (error) {
-    await db.query('ROLLBACK');
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error('回滚失败:', rollbackError.message);
+      }
+    }
     console.error('更新赛事错误:', error);
-    console.error('错误详情:', error.stack);
     res.status(500).json({ error: '服务器内部错误，请稍后重试' });
+  } finally {
+    if (client) client.release();
   }
 };
 

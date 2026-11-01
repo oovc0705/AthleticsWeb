@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 require('dotenv').config();
+const { jwtSecret } = require('../config/config');
 
 // 创建数据库连接池
 const pool = new Pool({
@@ -13,10 +14,9 @@ const pool = new Pool({
 
 // 生成JWT令牌
 exports.generateToken = (user) => {
-  // 这里使用简单的JWT配置，实际项目中应该使用环境变量存储密钥
   return jwt.sign(
     { id: user.id, email: user.email, role: user.role },
-    process.env.JWT_SECRET || 'your_secret_key_here', // 实际项目中应该使用环境变量
+    jwtSecret,
     { expiresIn: '24h' }
   );
 };
@@ -35,7 +35,7 @@ exports.verifyToken = async (req, res, next) => {
   
   try {
     // 验证令牌
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_secret_key_here'); // 实际项目中应该使用环境变量
+    const decoded = jwt.verify(token, jwtSecret);
     
     // 从数据库验证用户是否存在，并获取完整的用户信息
     const result = await pool.query('SELECT id, username, email, role FROM users WHERE id = $1', [decoded.id]);
@@ -87,7 +87,7 @@ exports.optionalAuth = async (req, res, next) => {
   }
   
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_secret_key_here');
+    const decoded = jwt.verify(token, jwtSecret);
     const result = await pool.query('SELECT id, username, email, role FROM users WHERE id = $1', [decoded.id]);
     if (result.rows.length > 0) {
       req.user = decoded;

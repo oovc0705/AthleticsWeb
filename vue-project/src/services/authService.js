@@ -7,53 +7,35 @@ import apiService from './apiService';
  */
 export const login = async (loginData) => {
   try {
-    console.log('=== 登录开始 ===');
-    console.log('1. 登录凭证:', loginData);
-    console.log('2. 凭证类型:', typeof loginData);
-    console.log('3. 邮箱:', loginData.email);
-    console.log('4. 密码:', loginData.password);
-    console.log('5. 密码长度:', loginData.password ? loginData.password.length : 0);
-    
     // 确保我们发送的是普通对象
     const sendData = {
       email: loginData.email,
       password: loginData.password
     };
-    
-    console.log('6. 发送数据:', sendData);
-    console.log('7. 发送数据类型:', typeof sendData);
-    
-    // 使用apiService发送登录请求
-    console.log('8. 使用apiService登录');
-    
+
     // 使用apiService发送登录请求到后端API
     const response = await apiService.post('/auth/login', sendData);
-    
-    console.log('9. 响应状态:', response.status);
-    console.log('10. 响应数据:', response.data);
-    
-    // 保存用户信息到localStorage
+
+    // 保存用户信息到localStorage；isAdminLoggedIn 仅对管理员置位
     if (response.data && response.data.success) {
-      console.log('11. 登录成功，保存到LocalStorage');
-      localStorage.setItem('isAdminLoggedIn', 'true');
-      localStorage.setItem('userInfo', JSON.stringify(response.data.user));
+      const loggedUser = response.data.user;
+      if (loggedUser && loggedUser.role === 'admin') {
+        localStorage.setItem('isAdminLoggedIn', 'true');
+      }
+      localStorage.setItem('userInfo', JSON.stringify(loggedUser));
       if (response.data.token) {
         localStorage.setItem('token', response.data.token);
       }
-      console.log('12. LocalStorage已保存');
-      console.log('    isAdminLoggedIn:', localStorage.getItem('isAdminLoggedIn'));
-      console.log('    userInfo:', JSON.parse(localStorage.getItem('userInfo')));
     } else if (response.data) {
       // 处理后端返回的其他数据格式
-      console.log('11. 登录成功但响应格式不同，保存到LocalStorage');
-      localStorage.setItem('isAdminLoggedIn', 'true');
-      localStorage.setItem('userInfo', JSON.stringify(response.data.user || response.data));
+      const loggedUser = response.data.user || response.data;
+      if (loggedUser && loggedUser.role === 'admin') {
+        localStorage.setItem('isAdminLoggedIn', 'true');
+      }
+      localStorage.setItem('userInfo', JSON.stringify(loggedUser));
       if (response.data.token) {
         localStorage.setItem('token', response.data.token);
       }
-      console.log('12. LocalStorage已保存');
-      console.log('    isAdminLoggedIn:', localStorage.getItem('isAdminLoggedIn'));
-      console.log('    userInfo:', JSON.parse(localStorage.getItem('userInfo')));
     }
     
     return response.data;
@@ -100,9 +82,7 @@ export const getCurrentUser = async () => {
     }
     
     // 使用apiService请求用户信息
-    const response = await apiService.get('/auth/current-user', { 
-      params: { id: userInfo.id } 
-    });
+    const response = await apiService.get('/auth/current-user');
     return response.data;
   } catch (error) {
     console.error('获取用户信息失败:', error);

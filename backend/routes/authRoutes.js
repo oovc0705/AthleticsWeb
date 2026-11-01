@@ -3,6 +3,25 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const { body, validationResult } = require('express-validator');
 const authMiddleware = require('../middleware/authMiddleware');
+const { createRateLimiter } = require('../middleware/rateLimiter');
+
+const loginLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: '登录尝试过于频繁，请15分钟后再试'
+});
+
+const registerLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  message: '注册请求过于频繁，请稍后再试'
+});
+
+const captchaLimiter = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 5,
+  message: '验证码请求过于频繁，请稍后再试'
+});
 
 // 登录验证规则（同时支持邮箱和用户名）
 const loginValidationRules = () => {
@@ -42,15 +61,15 @@ const validate = (req, res, next) => {
 };
 
 // 登录路由
-router.post('/login', loginValidationRules(), validate, authController.login);
+router.post('/login', loginLimiter, loginValidationRules(), validate, authController.login);
 
 // 发送验证码路由
-router.post('/send-captcha', [
+router.post('/send-captcha', captchaLimiter, [
   body('email').isEmail().normalizeEmail().withMessage('请输入有效的邮箱地址')
 ], validate, authController.sendCaptcha);
 
 // 注册路由
-router.post('/register', registerValidationRules(), validate, authController.register);
+router.post('/register', registerLimiter, registerValidationRules(), validate, authController.register);
 
 // 获取当前用户信息路由
 router.get('/current-user', authMiddleware.verifyToken, authController.getCurrentUser);

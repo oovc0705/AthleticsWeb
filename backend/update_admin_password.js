@@ -5,8 +5,13 @@ const bcrypt = require('bcryptjs');
 // 用户数据文件路径
 const usersFilePath = path.join(__dirname, 'data', 'users.json');
 
-// 新的管理员密码
-const newAdminPassword = 'admin123';
+// 新的管理员密码：从命令行参数或环境变量读取，禁止在源码中硬编码
+const newAdminPassword = process.argv[2] || process.env.ADMIN_PASSWORD;
+
+if (!newAdminPassword) {
+  console.error('用法: node update_admin_password.js <新密码> 或设置 ADMIN_PASSWORD 环境变量');
+  process.exit(1);
+}
 
 // 读取用户数据
 fs.readFile(usersFilePath, 'utf8', (err, data) => {

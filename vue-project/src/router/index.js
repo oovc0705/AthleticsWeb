@@ -83,7 +83,7 @@ const router = createRouter({
       path: '/admin',
       name: 'admin',
       component: () => import('../views/AdminCenter.vue'),
-      meta: { requiresSearchClear: true }
+      meta: { requiresSearchClear: true, requiresAdmin: true }
     }
   ],
 })

@@ -61,53 +61,41 @@ exports.login = async (req, res) => {
     }
 
     const user = result.rows[0];
-    
-    // 检查密码是否是加密的（bcrypt哈希通常以$2b$开头）
-    if (user.password.startsWith('$2b$')) {
-      // 使用bcrypt验证加密密码
-      bcrypt.compare(password, user.password, (err, isMatch) => {
-        if (err) {
-          console.error('密码验证错误:', err);
-          return res.status(500).json({
-            success: false,
-            error: '服务器内部错误，请稍后重试'
-          });
-        }
 
-        if (!isMatch) {
-          return res.status(401).json({
-            success: false,
-            error: '用户名/邮箱或密码错误'
-          });
-        }
-
-        // 返回用户信息和令牌（不包含密码）
-        const { password: _, ...userWithoutPassword } = user;
-        const token = authMiddleware.generateToken(userWithoutPassword);
-        res.json({
-          success: true,
-          user: userWithoutPassword,
-          token: token
-        });
+    // 仅接受 bcrypt 哈希（$2a$ / $2b$ / $2y$）；非哈希存量数据一律拒绝，避免明文比对
+    if (!/^\$2[aby]\$/.test(user.password)) {
+      console.warn(`用户 ${user.id} 的密码不是 bcrypt 哈希，已拒绝登录，请重置密码`);
+      return res.status(401).json({
+        success: false,
+        error: '用户名/邮箱或密码错误'
       });
-    } else {
-      // 直接比较明文密码（用于兼容旧数据）
-      if (password === user.password) {
-        // 返回用户信息和令牌（不包含密码）
-        const { password: _, ...userWithoutPassword } = user;
-        const token = authMiddleware.generateToken(userWithoutPassword);
-        res.json({
-          success: true,
-          user: userWithoutPassword,
-          token: token
+    }
+
+    bcrypt.compare(password, user.password, (err, isMatch) => {
+      if (err) {
+        console.error('密码验证错误:', err);
+        return res.status(500).json({
+          success: false,
+          error: '服务器内部错误，请稍后重试'
         });
-      } else {
+      }
+
+      if (!isMatch) {
         return res.status(401).json({
           success: false,
           error: '用户名/邮箱或密码错误'
         });
       }
-    }
+
+      // 返回用户信息和令牌（不包含密码）
+      const { password: _, ...userWithoutPassword } = user;
+      const token = authMiddleware.generateToken(userWithoutPassword);
+      res.json({
+        success: true,
+        user: userWithoutPassword,
+        token: token
+      });
+    });
   } catch (error) {
     console.error('登录处理错误:', error);
     return res.status(500).json({
@@ -236,7 +224,6 @@ exports.sendCaptcha = (req, res) => {
 
 // 注册功能
 exports.register = async (req, res) => {
-  console.log('Register request body:', req.body);
   const { name, email, password } = req.body;
 
   // 验证输入
@@ -370,8 +357,7 @@ exports.updateUserInfo = async (req, res) => {
     console.error('更新用户信息错误:', error);
     return res.status(500).json({
       success: false,
-      error: '服务器内部错误，请稍后重试',
-      details: error.message // 添加错误详情，便于调试
+      error: '服务器内部错误，请稍后重试'
     });
   }
 };

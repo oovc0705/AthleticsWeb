@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { JWT_SECRET } = process.env;
+const { jwtSecret } = require('../config/config');
 
 // 验证JWT令牌的中间件
 const authenticateToken = (req, res, next) => {
@@ -12,7 +12,7 @@ const authenticateToken = (req, res, next) => {
   }
 
   // 验证token
-  jwt.verify(token, JWT_SECRET || 'your-secret-key', (err, user) => {
+  jwt.verify(token, jwtSecret, (err, user) => {
     if (err) {
       if (err.name === 'TokenExpiredError') {
         return res.status(403).json({ error: '令牌已过期，请重新登录' });

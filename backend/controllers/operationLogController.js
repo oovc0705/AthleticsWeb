@@ -164,8 +164,7 @@ exports.getOperationLogs = async (req, res) => {
     console.error('获取操作记录失败:', error);
     console.error('错误堆栈:', error.stack);
     res.status(500).json({ 
-      error: '服务器内部错误，请稍后重试',
-      detail: error.message 
+      error: '服务器内部错误，请稍后重试'
     });
   }
 };

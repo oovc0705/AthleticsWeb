@@ -2,15 +2,18 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const app = express();
+
+// 生产环境部署在反向代理后，信任一层代理以获取真实客户端 IP（限流依赖）
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 const { body, validationResult } = require('express-validator');
 const fs = require('fs');
 const path = require('path');
 
-// 确保JWT密钥存在
-if (!process.env.JWT_SECRET) {
-  console.warn('警告: 未设置JWT_SECRET环境变量，使用默认密钥（不推荐在生产环境使用）');
-  process.env.JWT_SECRET = 'your-secret-key';
-}
+// 加载配置：缺少 JWT_SECRET 时生产环境会直接拒绝启动
+require('./config/config');
 
 // 捕获未处理的Promise拒绝
 process.on('unhandledRejection', (reason, promise) => {
@@ -30,12 +33,35 @@ if (!fs.existsSync(logsDir)) {
 }
 
 // 中间件配置
+// 允许的来源通过环境变量配置，生产环境必须显式加入前端域名
+const allowedOrigins = (process.env.CORS_ORIGINS ||
+  'http://localhost:3000,http://localhost:3001,http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001'], // 支持多个前端端口
+  origin: (origin, callback) => {
+    // 无 Origin 的请求（服务端调用、curl）直接放行
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('不允许的跨域来源'));
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
+
+// 基础安全响应头
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -99,12 +125,9 @@ try {
   console.error('加载操作记录路由失败:', error);
 }
 
-// 404 中间件
+// 404 中间件（不记录请求体，避免密码等敏感字段落盘）
 app.use((req, res) => {
   console.error(`404 - Route not found: ${req.method} ${req.url}`);
-  console.error('Request body:', req.body);
-  console.error('Request params:', req.params);
-  console.error('Request query:', req.query);
   res.status(404).json({ error: 'Route not found' });
 });
 
@@ -112,13 +135,16 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   const errorLog = `${new Date().toISOString()} - ERROR: ${err.message}\nStack: ${err.stack}\n`;
   fs.appendFileSync(path.join(logsDir, 'error.log'), errorLog);
-  
+
   console.error('请求URL:', req.url);
   console.error('请求方法:', req.method);
-  console.error('请求体:', req.body);
   console.error('错误信息:', err.message);
-  console.error('错误堆栈:', err.stack);
-  
+
+  // 跨域来源被拒绝
+  if (err.message === '不允许的跨域来源') {
+    return res.status(403).json({ error: '不允许的跨域请求' });
+  }
+
   // 根据错误类型返回不同的响应
   if (err.name === 'ValidationError') {
     return res.status(400).json({ error: err.message });
@@ -128,10 +154,9 @@ app.use((err, req, res, next) => {
     return res.status(400).json({ error: 'Invalid ID format' });
   }
   
-  // 返回更详细的错误信息
+  // 不向前端暴露内部错误细节
   res.status(500).json({ 
-    error: '服务器内部错误',
-    message: err.message
+    error: '服务器内部错误'
   });
 });
 

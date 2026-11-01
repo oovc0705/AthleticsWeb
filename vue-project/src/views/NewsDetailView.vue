@@ -38,7 +38,7 @@
       </div>
 
       <!-- 新闻内容 -->
-      <div class="news-content" v-html="article.content"></div>
+      <div class="news-content" v-html="safeContent"></div>
       
       <!-- 图片画廊 -->
       <div class="image-gallery" v-if="article.images && article.images.length > 0">
@@ -313,6 +313,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getNewsById } from '@/services/newsService'
 import api from '@/services/apiService'
 import { useUserStore } from '@/stores/user'
+import { sanitizeHtml } from '@/utils/sanitizeHtml'
 import LoginModal from '@/components/LoginModal.vue'
 import FavoriteButton from '@/components/FavoriteButton.vue'
 
@@ -324,6 +325,8 @@ const userStore = useUserStore()
 const loading = ref(true)
 const error = ref(null)
 const article = ref(null)
+// 富文本内容先清洗再渲染，防止存储型 XSS
+const safeContent = computed(() => sanitizeHtml(article.value?.content))
 const showImageModal = ref(false)
 const currentImage = ref({ url: '', alt: '', caption: '' })
 const submittingComment = ref(false)

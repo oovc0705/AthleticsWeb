@@ -25,5 +25,8 @@ pool.query('SELECT 1').catch((err) => {
 });
 
 module.exports = {
-    query: (text, params) => pool.query(text, params)
+    query: (text, params) => pool.query(text, params),
+    // 事务必须独占同一连接：获取 client 后自行 BEGIN/COMMIT/ROLLBACK 并 release
+    getClient: () => pool.connect(),
+    pool
 };
