@@ -192,6 +192,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { notify } from '@/utils/notify'
 import { useRoute, useRouter } from 'vue-router'
 import { getEventById, getEventSchedules, getEventResults, createSchedule, updateSchedule, deleteSchedule, createResult, updateResult, deleteResult } from '@/services/eventsService'
 import { useUserStore } from '@/stores/user'
@@ -313,7 +314,7 @@ const handleSaveSchedule = async (formData) => {
     await fetchSchedules()
     closeScheduleModal()
   } catch (err) {
-    alert('保存失败: ' + err.message)
+    notify('保存失败: ' + err.message)
   } finally {
     scheduleModalLoading.value = false
   }
@@ -327,7 +328,7 @@ const handleDeleteSchedule = async (scheduleId) => {
     await fetchSchedules()
     expandedSchedule.value = null
   } catch (err) {
-    alert('删除失败: ' + err.message)
+    notify('删除失败: ' + err.message)
   }
 }
 
@@ -357,7 +358,7 @@ const handleSaveResult = async (formData) => {
     await fetchSchedules()
     closeResultModal()
   } catch (err) {
-    alert('保存失败: ' + err.message)
+    notify('保存失败: ' + err.message)
   } finally {
     resultModalLoading.value = false
   }
@@ -370,7 +371,7 @@ const handleDeleteResult = async (resultId) => {
     await deleteResult(resultId)
     await fetchSchedules()
   } catch (err) {
-    alert('删除失败: ' + err.message)
+    notify('删除失败: ' + err.message)
   }
 }
 
@@ -425,7 +426,7 @@ const shareEvent = (platform) => {
   
   switch (platform) {
     case 'wechat':
-      alert('微信分享功能需要在微信客户端打开')
+      notify('微信分享功能需要在微信客户端打开')
       break
     case 'weibo': {
       const weiboUrl = `https://service.weibo.com/share/share.php?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(title)}`
@@ -440,7 +441,7 @@ const shareEvent = (platform) => {
 const copyEventLink = () => {
   const link = window.location.href
   navigator.clipboard.writeText(link).then(() => {
-    alert('链接已复制到剪贴板')
+    notify('链接已复制到剪贴板')
   }).catch(err => {
     console.error('复制失败:', err)
   })

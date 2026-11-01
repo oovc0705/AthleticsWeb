@@ -309,6 +309,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import { notify } from '@/utils/notify'
 import { useRoute, useRouter } from 'vue-router'
 import { getNewsById } from '@/services/newsService'
 import api from '@/services/apiService'
@@ -491,12 +492,12 @@ const insertEmoji = (emoji) => {
 
 const addComment = async () => {
   if (!userStore.isLoggedIn) {
-    alert('请先登录')
+    notify('请先登录')
     return
   }
   
   if (!newComment.value.content || newComment.value.content.trim() === '') {
-    alert('请输入评论内容')
+    notify('请输入评论内容')
     return
   }
   
@@ -517,7 +518,7 @@ const addComment = async () => {
     newComment.value.content = ''
   } catch (err) {
     console.error('发布评论失败:', err)
-    alert('发布评论失败')
+    notify('发布评论失败')
   } finally {
     submittingComment.value = false
   }
@@ -526,7 +527,7 @@ const addComment = async () => {
 // 点赞评论
 const handleLikeComment = async (commentId) => {
   if (!userStore.isLoggedIn) {
-    alert('请先登录')
+    notify('请先登录')
     return
   }
   
@@ -551,14 +552,14 @@ const handleLikeComment = async (commentId) => {
     updateComment(comments.value)
   } catch (err) {
     console.error('点赞失败:', err)
-    alert('点赞失败')
+    notify('点赞失败')
   }
 }
 
 // 点踩评论
 const handleDislikeComment = async (commentId) => {
   if (!userStore.isLoggedIn) {
-    alert('请先登录')
+    notify('请先登录')
     return
   }
   
@@ -583,7 +584,7 @@ const handleDislikeComment = async (commentId) => {
     updateComment(comments.value)
   } catch (err) {
     console.error('点踩失败:', err)
-    alert('点踩失败')
+    notify('点踩失败')
   }
 }
 
@@ -604,7 +605,7 @@ const cancelReply = () => {
 // 提交回复
 const submitReply = async (parentId, replyToUsername) => {
   if (!replyContent.value || replyContent.value.trim() === '') {
-    alert('请输入回复内容')
+    notify('请输入回复内容')
     return
   }
   
@@ -641,7 +642,7 @@ const submitReply = async (parentId, replyToUsername) => {
     cancelReply()
   } catch (err) {
     console.error('回复失败:', err)
-    alert('回复失败')
+    notify('回复失败')
   } finally {
     submittingReply.value = false
   }
@@ -705,7 +706,7 @@ const deleteComment = async (commentId) => {
     removeComment(comments.value)
   } catch (err) {
     console.error('删除评论失败:', err)
-    alert('删除评论失败')
+    notify('删除评论失败')
   }
 }
 
@@ -716,7 +717,7 @@ const shareArticle = (platform) => {
   
   switch (platform) {
     case 'wechat':
-      alert('微信分享功能需要在微信客户端打开')
+      notify('微信分享功能需要在微信客户端打开')
       break
     case 'weibo': {
       const weiboUrl = `https://service.weibo.com/share/share.php?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(title)}`
@@ -731,7 +732,7 @@ const shareArticle = (platform) => {
 const copyArticleLink = () => {
   const link = window.location.href
   navigator.clipboard.writeText(link).then(() => {
-    alert('链接已复制到剪贴板')
+    notify('链接已复制到剪贴板')
   }).catch(err => {
     console.error('复制失败:', err)
   })

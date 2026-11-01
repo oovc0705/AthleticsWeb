@@ -146,6 +146,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { notify } from '@/utils/notify'
 import { RouterLink } from 'vue-router'
 import { getAllEvents, createEvent, updateEvent, deleteEvent, getEventSchedules } from '@/services/eventsService'
 import { useUserStore } from '@/stores/user'
@@ -372,7 +373,7 @@ const handleDelete = async (id) => {
     // 触发事件通知其他组件数据已更新
     eventBus.emit(EVENTS.EVENTS_UPDATED)
   } catch (err) {
-    alert(t('events.deleteFailed') + err.message)
+    notify(t('events.deleteFailed') + err.message)
   }
 }
 
@@ -389,7 +390,7 @@ const handleSave = async (formData) => {
     // 触发事件通知其他组件数据已更新
     eventBus.emit(EVENTS.EVENTS_UPDATED)
   } catch (err) {
-    alert(t('events.saveFailed') + err.message)
+    notify(t('events.saveFailed') + err.message)
   } finally {
     modalLoading.value = false
   }

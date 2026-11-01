@@ -35,7 +35,7 @@
 | 16 | N+1 查询 | backend/controllers/athleteController.js:60-79 | 列表规模增长后数据库压力线性上升 | 已修复：改为一次查询，`LEFT JOIN athlete_achievements` + `array_agg` 聚合成就，列表接口由 N+1 降为 1 次查询 |
 | 17 | 同步写日志阻塞事件循环 | backend/server.js:44,131 | 高并发下 `appendFileSync` 阻塞请求处理 | 已修复：改为 `fs.appendFile` 异步写入（新增 `writeLog` 辅助函数），失败仅记录控制台，不再阻塞请求 |
 | 18 | 后台用户管理展示 mock 数据 | vue-project/src/views/AdminCenter.vue:462-468 | 生产后台显示假用户，运维会误判 | 已修复：后端新增管理员接口 `GET/PUT/DELETE /api/auth/users`（`verifyToken + isAdmin` 双重校验，禁止修改自己角色、禁止删除自己、唯一键冲突返回 409、有关联数据返回 409）；前端用户管理改为拉取真实用户并调用真实接口 |
-| 19 | `alert`/`console.log` 残留 | 多个 views/components/services | 体验粗糙、调试信息外泄 | 部分修复：`vue-project/src` 内 `console.log` 已全部清零（含 AdminLogin 打印登录表单含密码、AdminView 打印 token 与 localStorage 的高危调试日志；后端 `authMiddleware` 的用户信息日志一并删除）。`alert()` 仍保留为即时反馈，改组件内提示属 UI 改造，列为待办 |
+| 19 | `alert`/`console.log` 残留 | 多个 views/components/services | 体验粗糙、调试信息外泄 | 已修复：`vue-project/src` 内 `console.log` 全部清零（含 AdminLogin 打印登录表单含密码、AdminView 打印 token 与 localStorage 的高危调试日志；后端 `authMiddleware` 的用户信息日志一并删除）；新增 `src/utils/notify.js` 与 `src/components/AppToast.vue`，63 处 `alert()` 全部替换为页面内 toast（按文案自动分级 info/success/error，可点击关闭），不再有系统弹窗打断 |
 | 20 | 无用依赖与 Docker 构建方式 | backend/package.json（multer/bcrypt/validator）、Dockerfile:11 | 镜像体积偏大；`npm install` 不保证锁版本 | 已修复：卸载未被引用的 `bcrypt`（实际使用 bcryptjs）、`multer`、`validator`；Dockerfile 改为 `npm ci --omit=dev` |
 | 21 | 收藏接口吞异常返回空数据 | backend/routes/favoritesRoutes.js:57-65 | 数据库故障时前端表现为"没有收藏"，问题被掩盖 | 已修复：改为返回 500 + 通用错误文案；前端收藏页可据此提示失败而非误显示空列表 |
 | 22 | README 端口说明与配置不一致 | README.md:154（前端 5173）vs vue-project/vite.config.js:15（3000） | 按文档启动后访问错端口 | 已修复：README 改为 3000 并说明端口来自 vite 配置；CORS 说明同步为 `CORS_ORIGINS` 环境变量 |
@@ -44,6 +44,7 @@
 - 新增管理员接口 `GET /api/auth/users`、`PUT /api/auth/users/:id`、`DELETE /api/auth/users/:id`，均要求有效管理员令牌；后台「用户管理」由本地 mock 改为真实读写。
 - `GET /api/favorites` 在数据库异常时改由 HTTP 500 返回，前端不再把故障误显示为"没有收藏"。
 - 后端移除未使用的 `bcrypt`/`multer`/`validator`，Docker 构建改为 `npm ci` 锁定版本。
+- 前端 `alert()` 全部改为全局 toast 提示（新增 `src/utils/notify.js` 与 `src/components/AppToast.vue`），提示不再阻塞交互。
 
 ### 验证记录
 - 后端改动文件全部通过 `node --check`（12 个文件）。
@@ -51,11 +52,12 @@
 - 运行冒烟：生产模式缺 `JWT_SECRET` 启动即报错退出；配置密钥后正常监听；CORS 非法来源 403、合法来源 204；安全响应头生效；404 不回显请求体；登录限流第 11 次返回 429；500 响应无内部细节。
 - 复跑 `quick_scan.py`：高危告警由 22 条降至 9 条，剩余经逐条确认全部为误报（`.env.example` 占位符、参数化 SQL 被规则误判、i18n 的 "password" 文案、前端 `.env*` 仅含公开 API 地址与 i18n 开关）。
 - `npm run build` 期间生成了 vue-project/package-lock.json（原缺失），依赖锁定问题随之解决。
-- P2 阶段复核：21 个后端改动文件 `node --check` 通过；前端 `npm run build` 再次通过；`vue-project/src` 内 `console.log` 清零；冒烟确认服务正常启动，`/api/auth/users` 无令牌返回 401（新接口已挂鉴权），`/api/favorites` 无令牌返回 401。
+- P2 阶段复核：21 个后端改动文件 `node --check` 通过；前端 `npm run build` 再次通过；`vue-project/src` 内 `console.log` 清零、`alert(` 无残留；冒烟确认服务正常启动，`/api/auth/users` 无令牌返回 401（新接口已挂鉴权），`/api/favorites` 无令牌返回 401。
+- Toast 改造后重新 `npm run build` 通过（`AppToast` 已全局挂载于 App.vue）。
 
 ### 发布就绪状态
 - 结论：**Go（有条件）——完成管理员口令轮换与 git 历史清理后可发布**。P0 已清零，生产构建通过。
 - 遗留条件（发布前必须处理）：
   1. `admin123` 已随旧提交进入 git 历史（当前工作区已移除），请用 `node update_admin_password.js <新密码>` 轮换管理员口令，并用 `git filter-repo`/BFG 清理历史中的 `backend/data/users.json`、`backend/logs/*.log`。
   2. 生产部署需设置 `JWT_SECRET`、`CORS_ORIGINS`、数据库连接参数（参照 backend/.env.example）。
-- 剩余待办（P2）：仅剩第 19 项中的 `alert()` 统一改为组件内提示（新增后端用户管理接口的前端交互可在后续迭代中补加载态与分页）。
+- 剩余待办（P2）：无，第 13–22 项全部关闭。

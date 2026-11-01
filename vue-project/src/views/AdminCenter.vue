@@ -443,6 +443,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { notify } from '@/utils/notify'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { getAllAthletes, updateAthlete, deleteAthlete, createAthlete } from '../services/athletesService'
@@ -480,7 +481,7 @@ const fetchUsers = async () => {
     handleSearch()
   } catch (error) {
     console.error('获取用户列表失败:', error)
-    alert(error.response?.data?.error || '获取用户列表失败，请稍后重试')
+    notify(error.response?.data?.error || '获取用户列表失败，请稍后重试')
   } finally {
     usersLoading.value = false
   }
@@ -764,10 +765,10 @@ const saveContentChanges = async () => {
     
     await fetchLatestContent()
     closeContentEditModal()
-    alert(editingContent.value.id ? '内容已更新' : '内容已创建')
+    notify(editingContent.value.id ? '内容已更新' : '内容已创建')
   } catch (error) {
     console.error(editingContent.value.id ? '更新内容失败:' : '创建内容失败:', error)
-    alert(editingContent.value.id ? '更新失败，请稍后重试' : '创建失败，请稍后重试')
+    notify(editingContent.value.id ? '更新失败，请稍后重试' : '创建失败，请稍后重试')
   }
 }
 
@@ -823,7 +824,7 @@ const fetchOperationRecords = async (page = 1) => {
     operationLogsCurrentPage.value = data.currentPage
   } catch (error) {
     console.error('获取操作记录失败:', error)
-    alert('获取操作记录失败，请稍后重试')
+    notify('获取操作记录失败，请稍后重试')
   } finally {
     operationLogsLoading.value = false
   }
@@ -859,10 +860,10 @@ const deleteOperationRecord = async (record) => {
       
       // 重新获取操作记录列表
       await fetchOperationRecords(operationLogsCurrentPage.value)
-      alert('操作记录已删除')
+      notify('操作记录已删除')
     } catch (error) {
       console.error('删除操作记录失败:', error)
-      alert('删除操作记录失败，请稍后重试')
+      notify('删除操作记录失败，请稍后重试')
     }
   }
 }
@@ -920,10 +921,10 @@ const deleteContent = async (item) => {
       }
       
       await fetchLatestContent()
-      alert('内容已删除')
+      notify('内容已删除')
     } catch (error) {
       console.error('删除内容失败:', error)
-      alert('删除失败，请稍后重试')
+      notify('删除失败，请稍后重试')
     }
   }
 }
@@ -968,10 +969,10 @@ const saveUserChanges = async () => {
       handleSearch() // 重新搜索以更新显示
     }
     closeEditModal()
-    alert('用户信息已更新')
+    notify('用户信息已更新')
   } catch (error) {
     console.error('更新用户失败:', error)
-    alert(error.response?.data?.error || '更新失败，请稍后重试')
+    notify(error.response?.data?.error || '更新失败，请稍后重试')
   }
 }
 
@@ -982,10 +983,10 @@ const deleteUser = async (id) => {
     await apiService.delete(`/auth/users/${id}`)
     users.value = users.value.filter(u => u.id !== id)
     handleSearch() // 重新搜索以更新显示
-    alert('用户已删除')
+    notify('用户已删除')
   } catch (error) {
     console.error('删除用户失败:', error)
-    alert(error.response?.data?.error || '删除失败，请稍后重试')
+    notify(error.response?.data?.error || '删除失败，请稍后重试')
   }
 }
 
@@ -1013,13 +1014,13 @@ const restoreContent = async (record) => {
       if (result.success) {
         // 刷新操作记录列表以反映最新的还原状态
         await fetchOperationRecords(operationLogsCurrentPage.value)
-        alert('内容已成功还原')
+        notify('内容已成功还原')
       } else {
         throw new Error(result.error || '还原失败')
       }
     } catch (error) {
       console.error('还原内容失败:', error)
-      alert(`还原失败: ${error.message}`)
+      notify(`还原失败: ${error.message}`)
     }
   }
 }

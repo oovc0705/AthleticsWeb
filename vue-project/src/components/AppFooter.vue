@@ -84,6 +84,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { notify } from '@/utils/notify'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
@@ -94,7 +95,7 @@ const currentYear = computed(() => new Date().getFullYear())
 
 const subscribe = () => {
   // 模拟订阅操作
-  alert(t('footer.subscribeSuccess'))
+  notify(t('footer.subscribeSuccess'))
   email.value = ''
 }
 </script>

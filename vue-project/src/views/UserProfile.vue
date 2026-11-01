@@ -206,6 +206,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue';
+import { notify } from '@/utils/notify';
 import { useUserStore } from '@/stores/user';
 import { useI18n } from 'vue-i18n';
 import { getFavorites } from '@/services/favoritesService';
@@ -435,10 +436,10 @@ const savePreferences = async () => {
     userStore.setTheme(preferences.value.theme);
     
     // 暂时只做本地处理，实际应用中应该保存到服务器
-    alert(t('profile.preferences.settingsSaved'));
+    notify(t('profile.preferences.settingsSaved'));
   } catch (error) {
     console.error('保存偏好设置失败:', error);
-    alert(t('profile.preferences.settingsFailed'));
+    notify(t('profile.preferences.settingsFailed'));
   }
 };
 
@@ -447,13 +448,13 @@ const saveUsername = async () => {
   try {
     // 验证新用户名是否为空
     if (!newUsername.value.trim()) {
-      alert(t('profile.edit.usernameEmpty'));
+      notify(t('profile.edit.usernameEmpty'));
       return;
     }
     
     // 验证新用户名是否与当前用户名相同
     if (newUsername.value.trim() === userStore.user.username) {
-      alert(t('profile.edit.usernameSame'));
+      notify(t('profile.edit.usernameSame'));
       return;
     }
     
@@ -465,13 +466,13 @@ const saveUsername = async () => {
       userStore.user.username = response.user.username;
       // 切换回显示模式
       isEditingUsername.value = false;
-      alert(t('profile.edit.usernameUpdated'));
+      notify(t('profile.edit.usernameUpdated'));
     } else {
-      alert(response?.error || t('profile.edit.saveFailed'));
+      notify(response?.error || t('profile.edit.saveFailed'));
     }
   } catch (error) {
     console.error('更新用户名失败:', error);
-    alert(error.message || t('profile.edit.saveFailed'));
+    notify(error.message || t('profile.edit.saveFailed'));
   }
 };
 

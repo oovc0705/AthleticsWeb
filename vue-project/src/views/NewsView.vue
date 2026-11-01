@@ -125,6 +125,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { notify } from '@/utils/notify'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { getAllNews, createNews, updateNews, deleteNews } from '@/services/newsService'
@@ -286,7 +287,7 @@ const shareArticle = (article, platform) => {
   
   switch (platform) {
     case 'wechat':
-      alert('微信分享功能需要在微信客户端打开')
+      notify('微信分享功能需要在微信客户端打开')
       break
     case 'weibo': {
       const weiboUrl = `https://service.weibo.com/share/share.php?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(title)}`
@@ -299,7 +300,7 @@ const shareArticle = (article, platform) => {
 const copyArticleLink = (article) => {
   const link = `${window.location.origin}/news/${article.id}`
   navigator.clipboard.writeText(link).then(() => {
-    alert('链接已复制到剪贴板')
+    notify('链接已复制到剪贴板')
   }).catch(err => {
     console.error('复制失败:', err)
   })
@@ -335,7 +336,7 @@ const handleDelete = async (id) => {
     await deleteNews(id)
     await fetchNews()
   } catch (err) {
-    alert('删除失败: ' + err.message)
+    notify('删除失败: ' + err.message)
   }
 }
 
@@ -350,7 +351,7 @@ const handleSave = async (formData) => {
     showModal.value = false
     await fetchNews()
   } catch (err) {
-    alert('保存失败: ' + err.message)
+    notify('保存失败: ' + err.message)
   } finally {
     modalLoading.value = false
   }

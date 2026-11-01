@@ -2,6 +2,7 @@
 import { ref, onMounted, onErrorCaptured, watch, nextTick } from 'vue';
 import AppHeader from './components/AppHeader.vue';
 import AppFooter from './components/AppFooter.vue';
+import AppToast from './components/AppToast.vue';
 import { useUserStore } from './stores/user';
 import { useRoute } from 'vue-router';
 
@@ -91,6 +92,8 @@ onMounted(async () => {
       </main>
       <AppFooter />
     </template>
+
+    <AppToast />
   </div>
 </template>
 

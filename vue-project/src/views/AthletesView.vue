@@ -165,6 +165,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { notify } from '@/utils/notify'
 import { RouterLink } from 'vue-router'
 import { getAllAthletes, createAthlete, updateAthlete, deleteAthlete } from '../services/athletesService'
 import { useUserStore } from '../stores/user'
@@ -370,7 +371,7 @@ const handleDelete = async (id) => {
     await deleteAthlete(id)
     await fetchAthletes() // 刷新列表
   } catch (err) {
-    alert(t('athletes.deleteFailed') + err.message)
+    notify(t('athletes.deleteFailed') + err.message)
   }
 }
 
@@ -385,7 +386,7 @@ const handleSave = async (formData) => {
     showModal.value = false
     await fetchAthletes() // 刷新列表
   } catch (err) {
-    alert(t('athletes.saveFailed') + err.message)
+    notify(t('athletes.saveFailed') + err.message)
   } finally {
     modalLoading.value = false
   }

@@ -267,6 +267,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { notify } from '@/utils/notify'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { getAllAthletes, createAthlete, updateAthlete, deleteAthlete as deleteAthleteApi } from '../services/athletesService'
@@ -427,7 +428,7 @@ const saveAthlete = async () => {
     closeAthleteModal()
   } catch (error) {
     console.error('保存运动员失败:', error)
-    alert('保存运动员失败')
+    notify('保存运动员失败')
   }
 }
 
@@ -438,7 +439,7 @@ const deleteAthlete = async (id) => {
       await loadAthletes()
     } catch (error) {
       console.error('删除运动员失败:', error)
-      alert('删除运动员失败')
+      notify('删除运动员失败')
     }
   }
 }
@@ -472,25 +473,25 @@ const saveNews = async () => {
   try {
     // 前端验证
     if (!newsForm.value.title || newsForm.value.title.length < 5) {
-      alert('新闻标题不能为空且长度必须在5-200个字符之间');
+      notify('新闻标题不能为空且长度必须在5-200个字符之间');
       return;
     }
     if (newsForm.value.title.length > 200) {
-      alert('新闻标题长度不能超过200个字符');
+      notify('新闻标题长度不能超过200个字符');
       return;
     }
     if (!newsForm.value.content || newsForm.value.content.length < 10) {
-      alert('新闻内容不能为空且长度不能少于10个字符');
+      notify('新闻内容不能为空且长度不能少于10个字符');
       return;
     }
     
     // 再次验证，确保用户没有在验证通过后又修改了表单内容
     if (!newsForm.value.title || newsForm.value.title.length < 5 || newsForm.value.title.length > 200) {
-      alert('新闻标题不能为空且长度必须在5-200个字符之间');
+      notify('新闻标题不能为空且长度必须在5-200个字符之间');
       return;
     }
     if (!newsForm.value.content || newsForm.value.content.length < 10) {
-      alert('新闻内容不能为空且长度不能少于10个字符');
+      notify('新闻内容不能为空且长度不能少于10个字符');
       return;
     }
     
@@ -516,7 +517,7 @@ const saveNews = async () => {
     console.error('错误响应头部:', error.response?.headers)
     console.error('错误配置:', error.config)
     console.error('=== 错误详情结束 ===')
-    alert('保存新闻失败: ' + (error.response?.data?.message || error.message || '未知错误'))
+    notify('保存新闻失败: ' + (error.response?.data?.message || error.message || '未知错误'))
   }
 }
 
@@ -527,7 +528,7 @@ const deleteNews = async (id) => {
       await loadNews()
     } catch (error) {
       console.error('删除新闻失败:', error)
-      alert('删除新闻失败')
+      notify('删除新闻失败')
     }
   }
 }
@@ -547,7 +548,7 @@ const openEditEventModal = async (eventItem) => {
     showEventModal.value = true
   } catch (error) {
     console.error('获取赛事详情失败:', error)
-    alert('获取赛事详情失败: ' + error.message)
+    notify('获取赛事详情失败: ' + error.message)
   } finally {
     eventLoading.value = false
   }
@@ -582,13 +583,13 @@ const saveEvent = async (formData) => {
     // 关闭模态框
     closeEventModal()
     
-    alert('赛事保存成功')
+    notify('赛事保存成功')
   } catch (error) {
     console.error('保存赛事失败:', error)
     console.error('错误响应数据:', error.response?.data)
     console.error('错误状态码:', error.response?.status)
     console.error('错误配置:', error.config)
-    alert('保存赛事失败: ' + (error.response?.data?.message || error.message))
+    notify('保存赛事失败: ' + (error.response?.data?.message || error.message))
   } finally {
     eventLoading.value = false
   }
@@ -603,7 +604,7 @@ const deleteEvent = async (id) => {
       eventBus.emit(EVENTS.EVENTS_UPDATED)
     } catch (error) {
       console.error('删除赛事失败:', error)
-      alert('删除赛事失败')
+      notify('删除赛事失败')
     }
   }
 }

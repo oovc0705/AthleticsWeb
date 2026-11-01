@@ -17,6 +17,7 @@
 import { ref, onMounted, watch } from 'vue';
 import { useUserStore } from '../stores/user';
 import { addToFavorites, removeFromFavorites, isFavorite as checkIsFavorite } from '../services/favoritesService';
+import { notify } from '@/utils/notify';
 import HeartIcon from './icons/HeartIcon.vue';
 import { useI18n } from 'vue-i18n';
 
@@ -62,7 +63,7 @@ const checkFavoriteStatus = async () => {
 // 切换收藏状态
 const toggleFavorite = async () => {
   if (!userStore.isLoggedIn) {
-    alert(t('favoriteButton.loginRequired'));
+    notify(t('favoriteButton.loginRequired'));
     return;
   }
   
@@ -89,7 +90,7 @@ const toggleFavorite = async () => {
     });
   } catch (error) {
     console.error('操作失败:', error);
-    alert(error.message || '操作失败，请稍后重试');
+    notify(error.message || '操作失败，请稍后重试');
   } finally {
     isLoading.value = false;
   }
