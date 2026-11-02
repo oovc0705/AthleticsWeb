@@ -54,11 +54,12 @@
 - `npm run build` 期间生成了 vue-project/package-lock.json（原缺失），依赖锁定问题随之解决。
 - P2 阶段复核：21 个后端改动文件 `node --check` 通过；前端 `npm run build` 再次通过；`vue-project/src` 内 `console.log` 清零、`alert(` 无残留；冒烟确认服务正常启动，`/api/auth/users` 无令牌返回 401（新接口已挂鉴权），`/api/favorites` 无令牌返回 401。
 - Toast 改造后重新 `npm run build` 通过（`AppToast` 已全局挂载于 App.vue）。
+- Git 历史清理：`git filter-branch` 重写 5 个提交（本地 `main` 与当前分支），`git log` 已无敏感路径；重写前备份 bundle 已删除（旧提交仍可从远端 `origin` 取回）。
 
 ### 发布就绪状态
-- 结论：**Go（有条件）——完成 git 历史清理后可发布**。P0 已清零，生产构建通过，管理员口令已轮换。
+- 结论：**Go（有条件）——本地历史已清理、口令已轮换，可发布；远端旧历史是否同步由仓库所有者决定**。P0 已清零，生产构建通过。
 - 遗留条件（发布前必须处理）：
   1. ~~轮换管理员口令~~ **已完成**（2026-11-01）：`backend/data/users.json` 中管理员密码已改为 20 位随机口令（bcrypt 校验通过，旧口令 `admin123` 已失效）。生产使用 PostgreSQL 认证，需在目标库执行 `UPDATE users SET password = '<新 bcrypt 哈希>', updated_at = NOW() WHERE role = 'admin';`（哈希见本次会话输出，勿写入仓库）。
-  2. **待处理**：用 `git filter-repo`/BFG 清理 git 历史中的 `backend/data/users.json`、`backend/logs/*.log`（旧提交仍含 `admin123` 哈希；工作区已无这些文件）。
+  2. **本地已完成，远端待处理**：已用 `git filter-branch` 重写本地 `main` 与 `trae/agent-Jcl8j2` 全部提交，移除 `backend/data/users.json`、`backend/logs/*.log`、`backend/server.log`；本地任一新提交均不再包含这些路径。远端 `origin/main` 仍保留旧提交（未执行 force push，避免影响协作者），需你确认后再用 `git push --force-with-lease` 同步；旧提交中还含数据库口令 `ykfpostgresql`，建议一并轮换生产库口令。
   3. 生产部署需设置 `JWT_SECRET`、`CORS_ORIGINS`、数据库连接参数（参照 backend/.env.example）。
 - 剩余待办（P2）：无，第 13–22 项全部关闭。
