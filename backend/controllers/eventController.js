@@ -56,6 +56,10 @@ exports.getAllEvents = async (req, res) => {
 
     query += ` ORDER BY e.date ASC`;
 
+    const limitIndex = queryParams.length + 1;
+    query += ` LIMIT $${limitIndex}`;
+    queryParams.push(200);
+
     const result = await db.query(query, queryParams);
     
     res.json(result.rows);
@@ -156,30 +160,29 @@ exports.createEvent = async (req, res) => {
     const { name, date, location, description, imageUrl, level, type, status, organizer, endDate, schedules } = req.body;
     
     // 使用事务确保赛事主体和时间表项目的创建是原子操作
-    await db.query('BEGIN');
-    
-    const eventResult = await db.query(
-      `INSERT INTO events (name, date, location, description, image_url, level, type, status, organizer, end_date, created_at) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW()) 
-       RETURNING *`,
-      [name, date, location, description, imageUrl, level, type, status, organizer, endDate]
-    );
-    
-    const event = eventResult.rows[0];
-    
-    // 处理赛事时间表
-    if (schedules && Array.isArray(schedules)) {
-      for (const schedule of schedules) {
-        await db.query(
-          `INSERT INTO event_schedules (event_id, event_name, event_date, event_time, venue, status, description)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [event.id, schedule.event_name, schedule.event_date, schedule.event_time, schedule.venue, schedule.status || '未开始', schedule.description]
-        );
+    let event;
+    await db.withTransaction(async (tx) => {
+      const eventResult = await tx(
+        `INSERT INTO events (name, date, location, description, image_url, level, type, status, organizer, end_date, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+         RETURNING *`,
+        [name, date, location, description, imageUrl, level, type, status, organizer, endDate]
+      );
+
+      event = eventResult.rows[0];
+
+      // 处理赛事时间表
+      if (schedules && Array.isArray(schedules)) {
+        for (const schedule of schedules) {
+          await tx(
+            `INSERT INTO event_schedules (event_id, event_name, event_date, event_time, venue, status, description)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [event.id, schedule.event_name, schedule.event_date, schedule.event_time, schedule.venue, schedule.status || '未开始', schedule.description]
+          );
+        }
       }
-    }
-    
-    await db.query('COMMIT');
-    
+    });
+
     // 记录创建操作
     try {
       await recordOperation(req, {
@@ -197,7 +200,6 @@ exports.createEvent = async (req, res) => {
     
     res.status(201).json(event);
   } catch (error) {
-    await db.query('ROLLBACK');
     console.error('创建赛事错误:', error);
     res.status(500).json({ error: '服务器内部错误，请稍后重试' });
   }
@@ -219,42 +221,41 @@ exports.updateEvent = async (req, res) => {
     const originalEvent = originalResult.rows[0];
     
     // 使用事务确保赛事主体和时间表项目的更新是原子操作
-    await db.query('BEGIN');
-    
-    const eventResult = await db.query(
-      `UPDATE events 
-       SET name = $1, date = $2, location = $3, description = $4, image_url = $5, status = $6, level = $7, type = $8, organizer = $9, end_date = $10, updated_at = NOW()
-       WHERE id = $11 
-       RETURNING *`,
-      [name, date, location, description, imageUrl, status, level, type, organizer, endDate, eventId]
-    );
-    
-    console.log('Backend updateEvent - 更新结果:', eventResult.rows[0]);
-    
-    // 删除原有的时间表项目
-    await db.query('DELETE FROM event_schedules WHERE event_id = $1', [eventId]);
-    
-    // 插入新的时间表项目
-    if (schedules && Array.isArray(schedules)) {
-      for (const schedule of schedules) {
-        await db.query(
-          `INSERT INTO event_schedules (event_id, event_name, event_date, event_time, venue, status, description)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [eventId, schedule.event_name, schedule.event_date, schedule.event_time, schedule.venue, schedule.status || '未开始', schedule.description]
-        );
+    let updatedEvent;
+    await db.withTransaction(async (tx) => {
+      const eventResult = await tx(
+        `UPDATE events
+         SET name = $1, date = $2, location = $3, description = $4, image_url = $5, status = $6, level = $7, type = $8, organizer = $9, end_date = $10, updated_at = NOW()
+         WHERE id = $11
+         RETURNING *`,
+        [name, date, location, description, imageUrl, status, level, type, organizer, endDate, eventId]
+      );
+
+      updatedEvent = eventResult.rows[0];
+
+      // 删除原有的时间表项目
+      await tx('DELETE FROM event_schedules WHERE event_id = $1', [eventId]);
+
+      // 插入新的时间表项目
+      if (schedules && Array.isArray(schedules)) {
+        for (const schedule of schedules) {
+          await tx(
+            `INSERT INTO event_schedules (event_id, event_name, event_date, event_time, venue, status, description)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [eventId, schedule.event_name, schedule.event_date, schedule.event_time, schedule.venue, schedule.status || '未开始', schedule.description]
+          );
+        }
       }
-    }
-    
-    await db.query('COMMIT');
-    
+    });
+
     // 记录更新操作
     try {
       await recordOperation(req, {
         operationType: 'update',
         targetType: 'event',
         targetId: eventId,
-        targetTitle: eventResult.rows[0].name,
-        targetContent: eventResult.rows[0],
+        targetTitle: updatedEvent.name,
+        targetContent: updatedEvent,
         originalContent: originalEvent,
         sourcePage: `/events/${eventId}`
       });
@@ -262,10 +263,9 @@ exports.updateEvent = async (req, res) => {
       console.error('记录更新操作失败:', logError);
       // 不影响主要功能，继续执行
     }
-    
-    res.json(eventResult.rows[0]);
+
+    res.json(updatedEvent);
   } catch (error) {
-    await db.query('ROLLBACK');
     console.error('更新赛事错误:', error);
     console.error('错误详情:', error.stack);
     res.status(500).json({ error: '服务器内部错误，请稍后重试' });
@@ -358,7 +358,7 @@ exports.getEventsByDateRange = async (req, res) => {
 // 获取即将到来的赛事
 exports.getUpcomingEvents = async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 5;
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 5, 1), 100);
     const today = new Date().toISOString().split('T')[0]; // 格式化为 YYYY-MM-DD
     
     const result = await db.query(

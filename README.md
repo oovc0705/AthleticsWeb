@@ -97,16 +97,20 @@ npm install
 
 #### 3. 配置后端环境变量
 
-在 `backend` 目录下创建 `.env` 文件：
+在 `backend` 目录下参考 `.env.example` 创建 `.env` 文件：
 
 ```env
 PORT=3006
-JWT_SECRET=your-secret-key
+# 必须替换为足够长的随机字符串（可用 openssl rand -hex 32 生成）；
+# NODE_ENV=production 时缺失此项服务会拒绝启动
+JWT_SECRET=replace-with-a-long-random-secret
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=world_athletics
 DB_USER=your_db_user
 DB_PASSWORD=your_db_password
+# 允许跨域访问的前端来源，多个用逗号分隔
+CORS_ORIGIN=http://localhost:3000
 ```
 
 #### 4. 初始化数据库
@@ -143,6 +147,8 @@ npm install
 ```env
 VITE_API_BASE_URL=http://localhost:3006
 ```
+
+> 说明：前端请求优先使用 `VITE_API_BASE_URL`（自动拼接 `/api`）；未配置时回退为相对路径 `/api`，由 Vite 开发代理转发到 `VITE_API_PROXY_TARGET`（默认 `http://localhost:3006`）。
 
 #### 8. 启动前端开发服务器
 
@@ -240,18 +246,32 @@ cd vue-project
 vercel
 ```
 
+> **重要**：必须在 Vercel 项目设置（Settings → Environment Variables）中配置 `VITE_API_BASE_URL` 指向已部署的后端源（如 `https://your-backend.example.com`）。
+> 否则生产环境前端会请求同源 `/api`，被 SPA rewrite 规则返回 `index.html`，所有动态功能失效。
+> 同时后端需通过 `CORS_ORIGIN` 环境变量放行 Vercel 域名（如 `https://athletics-web.vercel.app`）。
+
 ### 后端部署
 
-可以使用Docker部署：
+可以使用Docker部署。`docker-compose.yml` 已包含 PostgreSQL 数据库服务（首次启动自动执行 `database/init.sql` 建表）。
+
+在 `backend` 目录创建 `.env` 文件提供以下变量后启动：
+
+```env
+JWT_SECRET=replace-with-a-long-random-secret
+DB_PASSWORD=replace-with-your-db-password
+CORS_ORIGIN=https://athletics-web.vercel.app
+```
 
 ```bash
 cd backend
 docker-compose up -d
 ```
 
+后端服务端口为 `3006`（容器内与宿主机一致），日志持久化到 `backend/logs/`。
+
 ## 开发注意事项
 
-1. **跨域配置**：后端CORS已配置支持 `http://localhost:3000` 和 `http://localhost:3001`
+1. **跨域配置**：默认仅允许 `http://localhost:3000`、`http://localhost:3001`；生产环境通过后端环境变量 `CORS_ORIGIN`（逗号分隔）放行实际域名
 2. **日志系统**：后端自动记录访问日志和错误日志到 `backend/logs/` 目录
 3. **国际化**：支持中文和英文切换，语言包位于 `vue-project/src/i18n/locales/`
 4. **状态管理**：使用Pinia管理用户状态，存储位置 `vue-project/src/stores/user.js`

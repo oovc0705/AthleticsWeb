@@ -91,22 +91,13 @@ exports.login = async (req, res) => {
         });
       });
     } else {
-      // 直接比较明文密码（用于兼容旧数据）
-      if (password === user.password) {
-        // 返回用户信息和令牌（不包含密码）
-        const { password: _, ...userWithoutPassword } = user;
-        const token = authMiddleware.generateToken(userWithoutPassword);
-        res.json({
-          success: true,
-          user: userWithoutPassword,
-          token: token
-        });
-      } else {
-        return res.status(401).json({
-          success: false,
-          error: '用户名/邮箱或密码错误'
-        });
-      }
+      // 数据库中的密码必须是 bcrypt 哈希；非哈希记录属于历史脏数据，
+      // 不允许再用明文比较登录，应通过重置密码流程处理
+      console.error('账号密码存储格式不受支持（非 bcrypt 哈希），userId:', user.id);
+      return res.status(401).json({
+        success: false,
+        error: '账号凭据格式已过期，请联系管理员重置密码'
+      });
     }
   } catch (error) {
     console.error('登录处理错误:', error);
@@ -207,6 +198,12 @@ exports.sendCaptcha = (req, res) => {
   const { email } = req.body;
 
   try {
+    // 顺带清理过期验证码，避免 Map 无限增长
+    const now = Date.now();
+    for (const [key, value] of captchaStore) {
+      if (value.expiresAt <= now) captchaStore.delete(key);
+    }
+
     // 生成6位随机数字验证码
     const captcha = Math.floor(100000 + Math.random() * 900000).toString();
     
@@ -319,59 +316,3 @@ exports.register = async (req, res) => {
   }
 };
 
-// 更新用户信息
-exports.updateUserInfo = async (req, res) => {
-  try {
-    // 从认证中间件获取用户ID
-    if (!req.user) {
-      return res.status(401).json({ error: '用户未认证' });
-    }
-
-    const { username } = req.body;
-    
-    // 验证输入
-    if (!username) {
-      return res.status(400).json({
-        success: false,
-        error: '用户名不能为空'
-      });
-    }
-
-    // 检查用户名是否已被其他用户使用
-    const existingUser = await pool.query(
-      'SELECT id FROM users WHERE username = $1 AND id != $2', 
-      [username, req.user.id]
-    );
-    
-    if (existingUser.rows.length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: '该用户名已被使用'
-      });
-    }
-
-    // 更新用户信息
-    const result = await pool.query(
-      'UPDATE users SET username = $1, updated_at = NOW() WHERE id = $2 RETURNING id, username, email, role, created_at, updated_at', 
-      [username, req.user.id]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const updatedUser = result.rows[0];
-    res.json({
-      success: true,
-      user: updatedUser,
-      message: '用户信息更新成功'
-    });
-  } catch (error) {
-    console.error('更新用户信息错误:', error);
-    return res.status(500).json({
-      success: false,
-      error: '服务器内部错误，请稍后重试',
-      details: error.message // 添加错误详情，便于调试
-    });
-  }
-};

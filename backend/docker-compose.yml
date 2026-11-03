@@ -1,15 +1,44 @@
-version: '3'
-
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: athletics-db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-world_athletics}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?请在 .env 或环境中设置 DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-world_athletics}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build: .
     ports:
-      - "3002:3002"
+      - "${PORT:-3006}:3006"
     environment:
       - NODE_ENV=production
-      - PORT=3002
+      - PORT=3006
+      # JWT_SECRET 必须显式提供，缺失时服务拒绝启动
+      - JWT_SECRET=${JWT_SECRET:?请在 .env 或环境中设置 JWT_SECRET（可用 openssl rand -hex 32 生成）}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-world_athletics}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:?请在 .env 或环境中设置 DB_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
     restart: always
     container_name: athletics-backend
     volumes:
-      - ./logs:/app/logs  # 日志持久化
+      - ./logs:/app/logs
     command: npm start
+
+volumes:
+  pgdata:

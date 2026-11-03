@@ -2,6 +2,9 @@ const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 require('dotenv').config();
 
+// 密钥统一从环境变量读取；server.js 启动时已保证生产环境必须显式设置
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-insecure-secret-CHANGE-ME';
+
 // 创建数据库连接池
 const pool = new Pool({
     host: process.env.DB_HOST || 'localhost',
@@ -13,10 +16,9 @@ const pool = new Pool({
 
 // 生成JWT令牌
 exports.generateToken = (user) => {
-  // 这里使用简单的JWT配置，实际项目中应该使用环境变量存储密钥
   return jwt.sign(
     { id: user.id, email: user.email, role: user.role },
-    process.env.JWT_SECRET || 'your_secret_key_here', // 实际项目中应该使用环境变量
+    JWT_SECRET,
     { expiresIn: '24h' }
   );
 };
@@ -35,7 +37,7 @@ exports.verifyToken = async (req, res, next) => {
   
   try {
     // 验证令牌
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_secret_key_here'); // 实际项目中应该使用环境变量
+    const decoded = jwt.verify(token, JWT_SECRET);
     
     // 从数据库验证用户是否存在，并获取完整的用户信息
     const result = await pool.query('SELECT id, username, email, role FROM users WHERE id = $1', [decoded.id]);
@@ -87,7 +89,7 @@ exports.optionalAuth = async (req, res, next) => {
   }
   
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_secret_key_here');
+    const decoded = jwt.verify(token, JWT_SECRET);
     const result = await pool.query('SELECT id, username, email, role FROM users WHERE id = $1', [decoded.id]);
     if (result.rows.length > 0) {
       req.user = decoded;

@@ -59,6 +59,10 @@ exports.getAllNews = async (req, res) => {
 
     query += ` GROUP BY n.id ORDER BY n.created_at DESC`;
 
+    const limitIndex = queryParams.length + 1;
+    query += ` LIMIT $${limitIndex}`;
+    queryParams.push(200);
+
     const result = await db.query(query, queryParams);
     
     const newsWithDetails = result.rows.map(news => ({
@@ -148,25 +152,29 @@ exports.createNews = async (req, res) => {
   try {
     const { title, content, author, category, thumbnail, tags } = req.body;
     
-    const result = await db.query(
-      `INSERT INTO news (title, content, author, category, status, thumbnail, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
-       RETURNING *`,
-      [title, content, author, category, 'published', thumbnail]
-    );
-    
-    const news = result.rows[0];
-    
-    // 插入标签
-    if (Array.isArray(tags)) {
-      for (const tag of tags) {
-        await db.query(
-          'INSERT INTO news_tags (news_id, tag) VALUES ($1, $2)',
-          [news.id, tag]
-        );
+    // 事务保证新闻主体与标签原子写入
+    let news;
+    await db.withTransaction(async (tx) => {
+      const result = await tx(
+        `INSERT INTO news (title, content, author, category, status, thumbnail, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+         RETURNING *`,
+        [title, content, author, category, 'published', thumbnail]
+      );
+
+      news = result.rows[0];
+
+      // 插入标签
+      if (Array.isArray(tags)) {
+        for (const tag of tags) {
+          await tx(
+            'INSERT INTO news_tags (news_id, tag) VALUES ($1, $2)',
+            [news.id, tag]
+          );
+        }
       }
-    }
-    
+    });
+
     // 记录创建操作
     try {
       await recordOperation(req, {
@@ -219,25 +227,27 @@ exports.updateNews = async (req, res) => {
     
     const { title, content, author, category, thumbnail, tags } = req.body;
     
-    // 更新新闻基本信息
-    await db.query(
-      `UPDATE news SET 
-       title = $1, content = $2, author = $3, category = $4, thumbnail = $5, updated_at = NOW()
-       WHERE id = $6`,
-      [title, content, author, category, thumbnail, newsId]
-    );
-    
-    // 更新标签 - 先删除现有标签，再插入新标签
-    if (Array.isArray(tags)) {
-      await db.query('DELETE FROM news_tags WHERE news_id = $1', [newsId]);
-      for (const tag of tags) {
-        await db.query(
-          'INSERT INTO news_tags (news_id, tag) VALUES ($1, $2)',
-          [newsId, tag]
-        );
+    // 更新新闻基本信息（标签重建同事务）
+    await db.withTransaction(async (tx) => {
+      await tx(
+        `UPDATE news SET
+         title = $1, content = $2, author = $3, category = $4, thumbnail = $5, updated_at = NOW()
+         WHERE id = $6`,
+        [title, content, author, category, thumbnail, newsId]
+      );
+
+      // 更新标签 - 先删除现有标签，再插入新标签
+      if (Array.isArray(tags)) {
+        await tx('DELETE FROM news_tags WHERE news_id = $1', [newsId]);
+        for (const tag of tags) {
+          await tx(
+            'INSERT INTO news_tags (news_id, tag) VALUES ($1, $2)',
+            [newsId, tag]
+          );
+        }
       }
-    }
-    
+    });
+
     // 获取更新后的新闻信息
     const updatedResult = await db.query(
       'SELECT * FROM news WHERE id = $1',
@@ -325,13 +335,13 @@ exports.deleteNews = async (req, res) => {
       // 不影响主要功能，继续执行
     }
     
-    // 删除相关的评论和标签
-    await db.query('DELETE FROM news_comments WHERE news_id = $1', [newsId]);
-    await db.query('DELETE FROM news_tags WHERE news_id = $1', [newsId]);
-    
-    // 删除新闻
-    await db.query('DELETE FROM news WHERE id = $1', [newsId]);
-    
+    // 删除相关的评论、标签和新闻本身（级联约束已兜底，事务保证原子性）
+    await db.withTransaction(async (tx) => {
+      await tx('DELETE FROM news_comments WHERE news_id = $1', [newsId]);
+      await tx('DELETE FROM news_tags WHERE news_id = $1', [newsId]);
+      await tx('DELETE FROM news WHERE id = $1', [newsId]);
+    });
+
     res.json({ message: '新闻删除成功' });
   } catch (error) {
     console.error('删除新闻错误:', error);
@@ -371,7 +381,7 @@ exports.getNewsByCategory = async (req, res) => {
 // 获取最新新闻
 exports.getLatestNews = async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 5;
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 5, 1), 100);
     const result = await db.query(`
       SELECT n.*, 
              COUNT(c.id) as comment_count,

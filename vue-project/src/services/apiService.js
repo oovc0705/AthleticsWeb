@@ -1,7 +1,14 @@
 import axios from 'axios';
 
+// 生产环境通过 VITE_API_BASE_URL 指定后端源（如 https://api.example.com）；
+// 未配置时回退到相对路径 /api，由本地 Vite 代理转发（见 vite.config.js）
+const API_ORIGIN = import.meta.env.VITE_API_BASE_URL;
+const baseURL = API_ORIGIN
+  ? `${String(API_ORIGIN).replace(/\/+$/, '')}/api`
+  : '/api';
+
 const api = axios.create({
-  baseURL: '/api', // 使用相对路径，Vite代理会处理
+  baseURL,
   timeout: 30000, // 增加到30秒，避免超时
   headers: {
     'Content-Type': 'application/json'

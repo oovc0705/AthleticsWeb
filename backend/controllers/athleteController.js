@@ -37,6 +37,35 @@ async function recordOperation(req, operationData) {
   }
 }
 
+// 列表接口单次返回的最大行数，防止数据增长后全量返回拖垮服务
+const LIST_ROW_CAP = 200;
+
+// 批量装配运动员成就与统计，避免逐行查询（N+1）
+async function decorateWithAchievements(rows) {
+  if (!rows.length) return [];
+  const ids = rows.map((athlete) => athlete.id);
+  const achievementsResult = await db.query(
+    'SELECT athlete_id, achievement FROM athlete_achievements WHERE athlete_id = ANY($1::int[]) ORDER BY id',
+    [ids]
+  );
+  const map = {};
+  for (const row of achievementsResult.rows) {
+    if (!map[row.athlete_id]) map[row.athlete_id] = [];
+    map[row.athlete_id].push(row.achievement);
+  }
+  return rows.map((athlete) => ({
+    ...athlete,
+    achievements: map[athlete.id] || [],
+    stats: {
+      goldMedals: athlete.gold_medals,
+      silverMedals: athlete.silver_medals,
+      bronzeMedals: athlete.bronze_medals,
+      worldRecords: athlete.world_records,
+      personalBest: athlete.personal_best
+    }
+  }));
+}
+
 // 获取所有运动员
 exports.getAllAthletes = async (req, res) => {
   try {
@@ -57,27 +86,14 @@ exports.getAllAthletes = async (req, res) => {
 
     query += ` ORDER BY a.name ASC`;
 
+    const limitIndex = queryParams.length + 1;
+    query += ` LIMIT $${limitIndex}`;
+    queryParams.push(LIST_ROW_CAP);
+
     const result = await db.query(query, queryParams);
-    
-    const athletesWithAchievements = await Promise.all(result.rows.map(async (athlete) => {
-      const achievementsResult = await db.query(
-        'SELECT achievement FROM athlete_achievements WHERE athlete_id = $1',
-        [athlete.id]
-      );
-      
-      return {
-        ...athlete,
-        achievements: achievementsResult.rows.map(row => row.achievement),
-        stats: {
-          goldMedals: athlete.gold_medals,
-          silverMedals: athlete.silver_medals,
-          bronzeMedals: athlete.bronze_medals,
-          worldRecords: athlete.world_records,
-          personalBest: athlete.personal_best
-        }
-      };
-    }));
-    
+
+    const athletesWithAchievements = await decorateWithAchievements(result.rows);
+
     res.json(athletesWithAchievements);
   } catch (error) {
     console.error('获取运动员列表错误:', error);
@@ -129,42 +145,46 @@ exports.createAthlete = async (req, res) => {
   try {
     const { name, sport, country, age, biography, stats, achievements } = req.body;
     
-    // 插入运动员基本信息
-    const result = await db.query(
-      `INSERT INTO athletes (name, sport, country, age, biography, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-       RETURNING *`,
-      [name, sport, country, age, biography]
-    );
-    
-    const athlete = result.rows[0];
-    
-    // 插入统计信息
-    if (stats) {
-      await db.query(
-        `INSERT INTO athlete_stats (athlete_id, gold_medals, silver_medals, bronze_medals, world_records, personal_best)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          athlete.id,
-          stats.goldMedals || 0,
-          stats.silverMedals || 0,
-          stats.bronzeMedals || 0,
-          stats.worldRecords || 0,
-          stats.personalBest || ''
-        ]
+    // 使用事务保证运动员主体、统计、成就原子写入
+    let athlete;
+    await db.withTransaction(async (tx) => {
+      // 插入运动员基本信息
+      const result = await tx(
+        `INSERT INTO athletes (name, sport, country, age, biography, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+         RETURNING *`,
+        [name, sport, country, age, biography]
       );
-    }
-    
-    // 插入成就
-    if (Array.isArray(achievements)) {
-      for (const achievement of achievements) {
-        await db.query(
-          'INSERT INTO athlete_achievements (athlete_id, achievement) VALUES ($1, $2)',
-          [athlete.id, achievement]
+
+      athlete = result.rows[0];
+
+      // 插入统计信息
+      if (stats) {
+        await tx(
+          `INSERT INTO athlete_stats (athlete_id, gold_medals, silver_medals, bronze_medals, world_records, personal_best)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            athlete.id,
+            stats.goldMedals || 0,
+            stats.silverMedals || 0,
+            stats.bronzeMedals || 0,
+            stats.worldRecords || 0,
+            stats.personalBest || ''
+          ]
         );
       }
-    }
-    
+
+      // 插入成就
+      if (Array.isArray(achievements)) {
+        for (const achievement of achievements) {
+          await tx(
+            'INSERT INTO athlete_achievements (athlete_id, achievement) VALUES ($1, $2)',
+            [athlete.id, achievement]
+          );
+        }
+      }
+    });
+
     // 记录创建操作
     try {
       await recordOperation(req, {
@@ -235,67 +255,69 @@ exports.updateAthlete = async (req, res) => {
       };
     }
     
-    // 更新运动员基本信息
-    await db.query(
-      `UPDATE athletes SET name = $1, sport = $2, country = $3, age = $4, biography = $5, updated_at = NOW()
-       WHERE id = $6`,
-      [name, sport, country, age, biography, athleteId]
-    );
-    
-    // 更新统计信息
-    if (stats) {
-      const statsResult = await db.query(
-        'SELECT * FROM athlete_stats WHERE athlete_id = $1',
-        [athleteId]
+    // 更新运动员基本信息（统计与成就同事务更新，避免中途失败留下混合状态）
+    await db.withTransaction(async (tx) => {
+      await tx(
+        `UPDATE athletes SET name = $1, sport = $2, country = $3, age = $4, biography = $5, updated_at = NOW()
+         WHERE id = $6`,
+        [name, sport, country, age, biography, athleteId]
       );
-      
-      if (statsResult.rows.length > 0) {
-        // 更新现有统计
-        await db.query(
-          `UPDATE athlete_stats SET 
-           gold_medals = $1, silver_medals = $2, bronze_medals = $3, 
-           world_records = $4, personal_best = $5
-           WHERE athlete_id = $6`,
-          [
-            stats.goldMedals !== undefined ? stats.goldMedals : statsResult.rows[0].gold_medals,
-            stats.silverMedals !== undefined ? stats.silverMedals : statsResult.rows[0].silver_medals,
-            stats.bronzeMedals !== undefined ? stats.bronzeMedals : statsResult.rows[0].bronze_medals,
-            stats.worldRecords !== undefined ? stats.worldRecords : statsResult.rows[0].world_records,
-            stats.personalBest !== undefined ? stats.personalBest : statsResult.rows[0].personal_best,
-            athleteId
-          ]
+
+      // 更新统计信息
+      if (stats) {
+        const statsResult = await tx(
+          'SELECT * FROM athlete_stats WHERE athlete_id = $1',
+          [athleteId]
         );
-      } else {
-        // 插入新的统计信息
-        await db.query(
-          `INSERT INTO athlete_stats (athlete_id, gold_medals, silver_medals, bronze_medals, world_records, personal_best)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [
-            athleteId,
-            stats.goldMedals || 0,
-            stats.silverMedals || 0,
-            stats.bronzeMedals || 0,
-            stats.worldRecords || 0,
-            stats.personalBest || ''
-          ]
-        );
+
+        if (statsResult.rows.length > 0) {
+          // 更新现有统计
+          await tx(
+            `UPDATE athlete_stats SET
+             gold_medals = $1, silver_medals = $2, bronze_medals = $3,
+             world_records = $4, personal_best = $5
+             WHERE athlete_id = $6`,
+            [
+              stats.goldMedals !== undefined ? stats.goldMedals : statsResult.rows[0].gold_medals,
+              stats.silverMedals !== undefined ? stats.silverMedals : statsResult.rows[0].silver_medals,
+              stats.bronzeMedals !== undefined ? stats.bronzeMedals : statsResult.rows[0].bronze_medals,
+              stats.worldRecords !== undefined ? stats.worldRecords : statsResult.rows[0].world_records,
+              stats.personalBest !== undefined ? stats.personalBest : statsResult.rows[0].personal_best,
+              athleteId
+            ]
+          );
+        } else {
+          // 插入新的统计信息
+          await tx(
+            `INSERT INTO athlete_stats (athlete_id, gold_medals, silver_medals, bronze_medals, world_records, personal_best)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+              athleteId,
+              stats.goldMedals || 0,
+              stats.silverMedals || 0,
+              stats.bronzeMedals || 0,
+              stats.worldRecords || 0,
+              stats.personalBest || ''
+            ]
+          );
+        }
       }
-    }
-    
-    // 更新成就
-    if (Array.isArray(achievements)) {
-      // 先删除现有成就
-      await db.query('DELETE FROM athlete_achievements WHERE athlete_id = $1', [athleteId]);
-      
-      // 插入新成就
-      for (const achievement of achievements) {
-        await db.query(
-          'INSERT INTO athlete_achievements (athlete_id, achievement) VALUES ($1, $2)',
-          [athleteId, achievement]
-        );
+
+      // 更新成就
+      if (Array.isArray(achievements)) {
+        // 先删除现有成就
+        await tx('DELETE FROM athlete_achievements WHERE athlete_id = $1', [athleteId]);
+
+        // 插入新成就
+        for (const achievement of achievements) {
+          await tx(
+            'INSERT INTO athlete_achievements (athlete_id, achievement) VALUES ($1, $2)',
+            [athleteId, achievement]
+          );
+        }
       }
-    }
-    
+    });
+
     // 获取更新后的运动员信息
     const updatedResult = await db.query(`
       SELECT a.*, s.gold_medals, s.silver_medals, s.bronze_medals, s.world_records, s.personal_best
@@ -415,13 +437,13 @@ exports.deleteAthlete = async (req, res) => {
       // 不影响主要功能，继续执行
     }
     
-    // 删除相关的统计信息和成就
-    await db.query('DELETE FROM athlete_stats WHERE athlete_id = $1', [athleteId]);
-    await db.query('DELETE FROM athlete_achievements WHERE athlete_id = $1', [athleteId]);
-    
-    // 删除运动员
-    await db.query('DELETE FROM athletes WHERE id = $1', [athleteId]);
-    
+    // 删除相关的统计信息、成就和运动员本身（级联约束已兜底，事务保证原子性）
+    await db.withTransaction(async (tx) => {
+      await tx('DELETE FROM athlete_stats WHERE athlete_id = $1', [athleteId]);
+      await tx('DELETE FROM athlete_achievements WHERE athlete_id = $1', [athleteId]);
+      await tx('DELETE FROM athletes WHERE id = $1', [athleteId]);
+    });
+
     res.json({ message: '运动员删除成功' });
   } catch (error) {
     console.error('删除运动员错误:', error);
@@ -483,24 +505,7 @@ exports.getAthletesByCountry = async (req, res) => {
     `, [country]);
     
     // 获取每个运动员的成就
-    const athletesWithAchievements = await Promise.all(result.rows.map(async (athlete) => {
-      const achievementsResult = await db.query(
-        'SELECT achievement FROM athlete_achievements WHERE athlete_id = $1',
-        [athlete.id]
-      );
-      
-      return {
-        ...athlete,
-        achievements: achievementsResult.rows.map(row => row.achievement),
-        stats: {
-          goldMedals: athlete.gold_medals,
-          silverMedals: athlete.silver_medals,
-          bronzeMedals: athlete.bronze_medals,
-          worldRecords: athlete.world_records,
-          personalBest: athlete.personal_best
-        }
-      };
-    }));
+    const athletesWithAchievements = await decorateWithAchievements(result.rows);
     
     res.json(athletesWithAchievements);
   } catch (error) {
@@ -521,24 +526,7 @@ exports.getAthletesBySport = async (req, res) => {
     `, [sport]);
     
     // 获取每个运动员的成就
-    const athletesWithAchievements = await Promise.all(result.rows.map(async (athlete) => {
-      const achievementsResult = await db.query(
-        'SELECT achievement FROM athlete_achievements WHERE athlete_id = $1',
-        [athlete.id]
-      );
-      
-      return {
-        ...athlete,
-        achievements: achievementsResult.rows.map(row => row.achievement),
-        stats: {
-          goldMedals: athlete.gold_medals,
-          silverMedals: athlete.silver_medals,
-          bronzeMedals: athlete.bronze_medals,
-          worldRecords: athlete.world_records,
-          personalBest: athlete.personal_best
-        }
-      };
-    }));
+    const athletesWithAchievements = await decorateWithAchievements(result.rows);
     
     res.json(athletesWithAchievements);
   } catch (error) {
@@ -550,7 +538,7 @@ exports.getAthletesBySport = async (req, res) => {
 // 获取获得金牌数最多的运动员
 exports.getTopGoldMedalists = async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 5;
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 5, 1), 100);
     const result = await db.query(`
       SELECT a.*, s.gold_medals, s.silver_medals, s.bronze_medals, s.world_records, s.personal_best
       FROM athletes a
@@ -561,24 +549,7 @@ exports.getTopGoldMedalists = async (req, res) => {
     `, [limit]);
     
     // 获取每个运动员的成就
-    const athletesWithAchievements = await Promise.all(result.rows.map(async (athlete) => {
-      const achievementsResult = await db.query(
-        'SELECT achievement FROM athlete_achievements WHERE athlete_id = $1',
-        [athlete.id]
-      );
-      
-      return {
-        ...athlete,
-        achievements: achievementsResult.rows.map(row => row.achievement),
-        stats: {
-          goldMedals: athlete.gold_medals,
-          silverMedals: athlete.silver_medals,
-          bronzeMedals: athlete.bronze_medals,
-          worldRecords: athlete.world_records,
-          personalBest: athlete.personal_best
-        }
-      };
-    }));
+    const athletesWithAchievements = await decorateWithAchievements(result.rows);
     
     res.json(athletesWithAchievements);
   } catch (error) {

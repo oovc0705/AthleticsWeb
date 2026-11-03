@@ -41,8 +41,8 @@ import { login } from '../services/authService'
 
 const router = useRouter()
 const loginForm = ref({
-  email: 'admin@example.com', // 使用邮箱登录
-  password: 'admin123'
+  email: '',
+  password: ''
 })
 const error = ref('')
 const isLoading = ref(false)

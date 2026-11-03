@@ -6,10 +6,14 @@ const { body, validationResult } = require('express-validator');
 const fs = require('fs');
 const path = require('path');
 
-// 确保JWT密钥存在
+// 确保JWT密钥存在：生产环境缺失密钥必须直接退出，避免用公开默认值签发可伪造的令牌
 if (!process.env.JWT_SECRET) {
-  console.warn('警告: 未设置JWT_SECRET环境变量，使用默认密钥（不推荐在生产环境使用）');
-  process.env.JWT_SECRET = 'your-secret-key';
+  if (process.env.NODE_ENV === 'production') {
+    console.error('致命错误: 生产环境必须设置 JWT_SECRET 环境变量（足够长的随机字符串），服务拒绝启动');
+    process.exit(1);
+  }
+  console.warn('警告: 未设置 JWT_SECRET 环境变量，使用仅适用于本地开发的临时密钥，请勿在生产环境这样运行');
+  process.env.JWT_SECRET = 'dev-only-insecure-secret-CHANGE-ME';
 }
 
 // 捕获未处理的Promise拒绝
@@ -25,13 +29,57 @@ process.on('uncaughtException', (error) => {
 
 // 创建日志目录
 const logsDir = path.join(__dirname, 'logs');
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir);
+try {
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir);
+  }
+} catch (err) {
+  console.error('创建日志目录失败（改用控制台输出）:', err.message);
+}
+
+// 安全的文件追加：磁盘/权限异常时降级为控制台输出，绝不阻断请求
+function appendLog(fileName, content) {
+  try {
+    fs.appendFileSync(path.join(logsDir, fileName), content);
+  } catch (err) {
+    console.error(`写入日志文件 ${fileName} 失败:`, err.message);
+  }
+}
+
+// 简单的固定窗口限流（无额外依赖）。单实例部署足够；多实例需替换为 Redis 方案
+function createRateLimiter({ windowMs, max, message }) {
+  const hits = new Map();
+  const sweep = () => {
+    const now = Date.now();
+    for (const [key, rec] of hits) {
+      if (rec.resetAt <= now) hits.delete(key);
+    }
+  };
+  const timer = setInterval(sweep, windowMs);
+  if (typeof timer.unref === 'function') timer.unref();
+
+  return (req, res, next) => {
+    const now = Date.now();
+    const key = req.ip;
+    let rec = hits.get(key);
+    if (!rec || rec.resetAt <= now) {
+      rec = { count: 0, resetAt: now + windowMs };
+      hits.set(key, rec);
+    }
+    rec.count += 1;
+    if (rec.count > max) {
+      return res.status(429).json({ error: message });
+    }
+    next();
+  };
 }
 
 // 中间件配置
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+  : ['http://localhost:3000', 'http://localhost:3001'];
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001'], // 支持多个前端端口
+  origin: allowedOrigins, // 通过 CORS_ORIGIN 环境变量配置（逗号分隔），默认仅本地开发端口
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -39,10 +87,34 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 日志中间件
+// 基础安全响应头（CSP 需结合前端资源来源单独评估，列入待办）
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-XSS-Protection', '0');
+  next();
+});
+
+// 认证接口限流，防止在线暴力破解与刷验证码
+const loginLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: '尝试次数过多，请稍后再试'
+});
+const registerLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: '操作过于频繁，请稍后再试'
+});
+app.use('/api/auth/login', loginLimiter);
+app.use('/api/auth/register', registerLimiter);
+app.use('/api/auth/send-captcha', registerLimiter);
+
+// 日志中间件（只记录方法/URL/IP，禁止记录请求体，避免密码等敏感信息落盘）
 app.use((req, res, next) => {
   const logEntry = `${new Date().toISOString()} - ${req.method} ${req.url} - IP: ${req.ip}\n`;
-  fs.appendFileSync(path.join(logsDir, 'access.log'), logEntry);
+  appendLog('access.log', logEntry);
   next();
 });
 
@@ -102,37 +174,34 @@ try {
 // 404 中间件
 app.use((req, res) => {
   console.error(`404 - Route not found: ${req.method} ${req.url}`);
-  console.error('Request body:', req.body);
-  console.error('Request params:', req.params);
-  console.error('Request query:', req.query);
   res.status(404).json({ error: 'Route not found' });
 });
 
 // 错误处理中间件
 app.use((err, req, res, next) => {
   const errorLog = `${new Date().toISOString()} - ERROR: ${err.message}\nStack: ${err.stack}\n`;
-  fs.appendFileSync(path.join(logsDir, 'error.log'), errorLog);
-  
+  appendLog('error.log', errorLog);
+
+  // 详细错误仅记录在服务端日志，不向客户端泄漏内部信息/SQL 报错
   console.error('请求URL:', req.url);
   console.error('请求方法:', req.method);
-  console.error('请求体:', req.body);
   console.error('错误信息:', err.message);
   console.error('错误堆栈:', err.stack);
-  
+
   // 根据错误类型返回不同的响应
   if (err.name === 'ValidationError') {
     return res.status(400).json({ error: err.message });
   }
-  
+
+  if (err.type === 'entity.parse.failed' || err.type === 'entity.too.large') {
+    return res.status(400).json({ error: '请求数据格式错误' });
+  }
+
   if (err.name === 'CastError') {
     return res.status(400).json({ error: 'Invalid ID format' });
   }
-  
-  // 返回更详细的错误信息
-  res.status(500).json({ 
-    error: '服务器内部错误',
-    message: err.message
-  });
+
+  res.status(500).json({ error: '服务器内部错误' });
 });
 
 // 启动服务器

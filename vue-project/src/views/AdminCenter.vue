@@ -459,12 +459,12 @@ const searchTerm = ref('')
 const isEditModalOpen = ref(false)
 const editingUser = ref(null)
 
-// 模拟用户数据
+// 模拟用户数据（仅前端占位，用户管理尚未接入后端接口；使用 .invalid 占位域名）
 const users = ref([
-  { id: 1, username: 'admin', email: 'admin@example.com', role: 'admin', createdAt: '2024-01-01T00:00:00Z' },
-  { id: 2, username: 'user1', email: 'user1@example.com', role: 'user', createdAt: '2024-01-02T00:00:00Z' },
-  { id: 3, username: 'user2', email: 'user2@example.com', role: 'user', createdAt: '2024-01-03T00:00:00Z' },
-  { id: 4, username: 'user3', email: 'user3@example.com', role: 'user', createdAt: '2024-01-04T00:00:00Z' }
+  { id: 1, username: 'admin', email: 'admin@example.invalid', role: 'admin', createdAt: '2024-01-01T00:00:00Z' },
+  { id: 2, username: 'user1', email: 'user1@example.invalid', role: 'user', createdAt: '2024-01-02T00:00:00Z' },
+  { id: 3, username: 'user2', email: 'user2@example.invalid', role: 'user', createdAt: '2024-01-03T00:00:00Z' },
+  { id: 4, username: 'user3', email: 'user3@example.invalid', role: 'user', createdAt: '2024-01-04T00:00:00Z' }
 ])
 
 // 过滤后的用户列表

@@ -21,7 +21,7 @@ router.post('/:type/:id', authMiddleware.verifyToken, async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('添加收藏失败:', error);
-    res.status(500).json({ error: error.message || '添加收藏失败' });
+    res.status(500).json({ error: '添加收藏失败' });
   }
 });
 
@@ -39,7 +39,7 @@ router.delete('/:type/:id', authMiddleware.verifyToken, async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('移除收藏失败:', error);
-    res.status(500).json({ error: error.message || '移除收藏失败' });
+    res.status(500).json({ error: '移除收藏失败' });
   }
 });
 

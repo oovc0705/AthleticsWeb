@@ -55,8 +55,8 @@ exports.getOperationLogs = async (req, res) => {
   try {
     console.log('获取操作记录请求:', req.query);
     
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 20, 1), 200);
     const operationType = req.query.operationType;
     const targetType = req.query.targetType;
     const adminName = req.query.adminName;
@@ -163,9 +163,8 @@ exports.getOperationLogs = async (req, res) => {
   } catch (error) {
     console.error('获取操作记录失败:', error);
     console.error('错误堆栈:', error.stack);
-    res.status(500).json({ 
-      error: '服务器内部错误，请稍后重试',
-      detail: error.message 
+    res.status(500).json({
+      error: '服务器内部错误，请稍后重试'
     });
   }
 };
